@@ -284,7 +284,6 @@ class ProxyServer {
             }
         }
 
-        // --- 이 메서드를 최종 수정합니다 ---
         private fun createFinalOllamaChunk(originalRequestBody: String): String {
             val type = object : TypeToken<Map<String, Any>>() {}.type
             val originalRequestMap: Map<String, Any> = gson.fromJson(originalRequestBody, type)

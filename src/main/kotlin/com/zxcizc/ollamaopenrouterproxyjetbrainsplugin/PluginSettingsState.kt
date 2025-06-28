@@ -13,7 +13,7 @@ import com.intellij.util.xmlb.XmlSerializerUtil
 class PluginSettingsState : PersistentStateComponent<PluginSettingsState> {
 
     var openRouterApiKey: String = ""
-    var enableDebugLogging: Boolean = false // --- 이 줄을 추가합니다 ---
+    var enableDebugLogging: Boolean = false
 
     override fun getState(): PluginSettingsState {
         return this
