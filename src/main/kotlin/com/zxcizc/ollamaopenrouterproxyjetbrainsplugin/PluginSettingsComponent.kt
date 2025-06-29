@@ -5,7 +5,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.Disposable
 import com.intellij.ui.components.*
 import com.intellij.ui.SearchTextField
@@ -31,9 +30,6 @@ private data class SettingsOpenRouterModelInfo(val id: String)
 class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disposable {
 
     val panel: JPanel
-    private val tabbedPane = JTabbedPane()
-    
-    // 기존 모델 관리 관련 컴포넌트들
     private val openRouterApiKeyField = JBPasswordField()
     private val apiKeyStatusLabel = JBLabel()
     private val ollamaBaseUrlField = JBTextField()
@@ -55,13 +51,6 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     private val removeAllButton = JButton("<<")
     private val refreshButton = JButton("Refresh Models")
     
-    // 파라미터 관련 컴포넌트들
-    private val parametersEnabledCheckBox = JCheckBox("Enable Custom Parameters")
-    private val temperatureComponent: FloatSliderComponent
-    private val maxTokensComponent: IntegerSpinnerComponent
-    private val topPComponent: FloatSliderComponent
-    private val topKComponent: IntegerSpinnerComponent
-    
     // 전체 모델 목록 (필터링용)
     private val allAvailableModels = mutableListOf<String>()
     private val settings = PluginSettingsState.getInstance()
@@ -70,60 +59,6 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         // 설정 변경 리스너 등록
         settings.addListener(this)
         
-        // 파라미터 컴포넌트들 초기화
-        temperatureComponent = FloatSliderComponent(
-            ParameterDefinitions.CORE_PARAMETERS.find { it.key == "temperature" }!!
-        ) { value -> 
-            if (settings.parametersEnabled) {
-                settings.paramTemperature = value
-                settings.notifyParametersChanged()
-            }
-        }
-        
-        maxTokensComponent = IntegerSpinnerComponent(
-            ParameterDefinitions.CORE_PARAMETERS.find { it.key == "max_tokens" }!!
-        ) { value ->
-            if (settings.parametersEnabled) {
-                settings.paramMaxTokens = value
-                settings.notifyParametersChanged()
-            }
-        }
-        
-        topPComponent = FloatSliderComponent(
-            ParameterDefinitions.CORE_PARAMETERS.find { it.key == "top_p" }!!
-        ) { value ->
-            if (settings.parametersEnabled) {
-                settings.paramTopP = value
-                settings.notifyParametersChanged()
-            }
-        }
-        
-        topKComponent = IntegerSpinnerComponent(
-            ParameterDefinitions.CORE_PARAMETERS.find { it.key == "top_k" }!!
-        ) { value ->
-            if (settings.parametersEnabled) {
-                settings.paramTopK = value ?: 0
-                settings.notifyParametersChanged()
-            }
-        }
-        
-        // 기존 설정들
-        setupExistingComponents()
-        setupModelLists()
-        setupButtons()
-        setupSearchFields()
-        
-        // 파라미터 컴포넌트 설정
-        setupParameterComponents()
-        
-        // 탭 패널 생성
-        panel = createTabbedPanel()
-        
-        // 초기 상태 설정
-        loadInitialSettings()
-    }
-    
-    private fun setupExistingComponents() {
         // 프록시 활성화 체크박스에 액션 리스너 추가
         enableProxyCheckBox.addActionListener {
             settings.isProxyEnabled = enableProxyCheckBox.isSelected
@@ -144,286 +79,19 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
                 }
             }
         })
-    }
-    
-    private fun setupParameterComponents() {
-        // 파라미터 활성화 체크박스
-        parametersEnabledCheckBox.addActionListener {
-            val enabled = parametersEnabledCheckBox.isSelected
-            settings.parametersEnabled = enabled
-            updateParameterComponentsEnabled(enabled)
-            if (enabled) {
-                loadParametersFromSettings()
-            }
-        }
         
-        // 초기 활성화 상태 설정
-        parametersEnabledCheckBox.isSelected = settings.parametersEnabled
-        updateParameterComponentsEnabled(settings.parametersEnabled)
-    }
-    
-    private fun updateParameterComponentsEnabled(enabled: Boolean) {
-        temperatureComponent.isEnabled = enabled
-        maxTokensComponent.isEnabled = enabled
-        topPComponent.isEnabled = enabled
-        topKComponent.isEnabled = enabled
+        setupModelLists()
+        setupButtons()
+        setupSearchFields()
         
-        // 비활성화시 컴포넌트 색상 변경
-        val components = listOf(temperatureComponent, maxTokensComponent, topPComponent, topKComponent)
-        components.forEach { component ->
-            component.background = if (enabled) {
-                UIManager.getColor("Panel.background")
-            } else {
-                JBColor.LIGHT_GRAY
-            }
-        }
-    }
-    
-    private fun createTabbedPanel(): JPanel {
-        val mainPanel = JPanel(BorderLayout())
+        panel = createMainPanel()
         
-        // 공통 설정 (탭 외부)
-        val commonPanel = createCommonSettingsPanel()
-        mainPanel.add(commonPanel, BorderLayout.NORTH)
-        
-        // 탭 패널
-        tabbedPane.addTab("🔧 Models", createModelsPanel())
-        tabbedPane.addTab("⚙️ Parameters", createParametersPanel())
-        
-        mainPanel.add(tabbedPane, BorderLayout.CENTER)
-        
-        return mainPanel
-    }
-    
-    private fun createCommonSettingsPanel(): JPanel {
-        // 설정 안내 패널
-        val guidancePanel = JPanel(BorderLayout())
-        guidancePanel.border = JBUI.Borders.compound(
-            JBUI.Borders.empty(5, 10),
-            JBUI.Borders.customLine(JBColor(0xB3D7FF, 0x4A90E2), 1)
-        )
-        guidancePanel.background = JBColor(0xE8F4FD, 0x2D3748)
-        guidancePanel.isOpaque = true
-        
-        val guidanceLabel = JBLabel("""
-            <html>
-            <b>📋 Setup Guide:</b><br>
-            1. Go to <b>Tools → AI Assistant → Models</b><br>
-            2. Set Ollama URL to: <b>http://localhost:11444</b><br>
-            3. Configure your OpenRouter API key below<br>
-            4. The proxy will route requests between local Ollama and OpenRouter
-            </html>
-        """.trimIndent())
-        guidanceLabel.border = JBUI.Borders.empty(10)
-        guidancePanel.add(guidanceLabel, BorderLayout.CENTER)
-        
-        // API 키 입력 패널 생성
-        val apiKeyPanel = JPanel(BorderLayout())
-        apiKeyPanel.add(openRouterApiKeyField, BorderLayout.CENTER)
-        apiKeyPanel.add(apiKeyStatusLabel, BorderLayout.SOUTH)
-        
-        val commonPanel = FormBuilder.createFormBuilder()
-            .addComponent(guidancePanel, 1)
-            .addVerticalGap(10)
-            .addLabeledComponent(JBLabel("Enter your OpenRouter API Key:"), apiKeyPanel, 1, false)
-            .addLabeledComponent(JBLabel("Ollama Base URL:"), ollamaBaseUrlField, 1, false)
-            .addComponent(enableProxyCheckBox, 1)
-            .addComponent(enableDebugLoggingCheckBox, 1)
-            .panel
-            
-        return commonPanel
-    }
-    
-    private fun createModelsPanel(): JPanel {
-        val panel = JPanel(BorderLayout())
-        panel.border = JBUI.Borders.emptyTop(10)
-        
-        // 제목
-        val titlePanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        titlePanel.add(JBLabel("Model Whitelist (if none selected, all models are available):"))
-        titlePanel.add(refreshButton)
-        
-        // 메인 컨텐츠
-        val contentPanel = JPanel(BorderLayout())
-        contentPanel.add(createDualListPanel(), BorderLayout.CENTER)
-        
-        panel.add(titlePanel, BorderLayout.NORTH)
-        panel.add(contentPanel, BorderLayout.CENTER)
-        
-        return panel
-    }
-    
-    private fun createParametersPanel(): JPanel {
-        val panel = JPanel(BorderLayout())
-        
-        // 상단 컨트롤
-        val topPanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        topPanel.add(parametersEnabledCheckBox)
-        
-        val saveButton = JButton("💾 Save")
-        val resetButton = JButton("🔄 Reset")
-        val presetButton = JButton("📋 Presets")
-        
-        saveButton.addActionListener { saveParametersToSettings() }
-        resetButton.addActionListener { resetParametersToDefaults() }
-        presetButton.addActionListener { showPresetMenu(presetButton) }
-        
-        topPanel.add(Box.createHorizontalStrut(20))
-        topPanel.add(saveButton)
-        topPanel.add(resetButton)
-        topPanel.add(presetButton)
-        
-        // 파라미터 폼
-        val formPanel = createParameterForm()
-        
-        panel.add(topPanel, BorderLayout.NORTH)
-        panel.add(formPanel, BorderLayout.CENTER)
-        
-        return panel
-    }
-    
-    private fun createParameterForm(): JPanel {
-        val formBuilder = FormBuilder.createFormBuilder()
-        
-        // 섹션 제목
-        formBuilder.addComponent(JBLabel("<html><h3>🎯 Core Generation Parameters</h3></html>"))
-        formBuilder.addVerticalGap(10)
-        
-        // Temperature
-        val tempDef = ParameterDefinitions.CORE_PARAMETERS.find { it.key == "temperature" }!!
-        formBuilder.addLabeledComponent(
-            ParameterLabelComponent(tempDef),
-            temperatureComponent,
-            1, false
-        )
-        
-        // Max Tokens
-        val maxTokensDef = ParameterDefinitions.CORE_PARAMETERS.find { it.key == "max_tokens" }!!
-        formBuilder.addLabeledComponent(
-            ParameterLabelComponent(maxTokensDef),
-            maxTokensComponent,
-            1, false
-        )
-        
-        // Top P
-        val topPDef = ParameterDefinitions.CORE_PARAMETERS.find { it.key == "top_p" }!!
-        formBuilder.addLabeledComponent(
-            ParameterLabelComponent(topPDef),
-            topPComponent,
-            1, false
-        )
-        
-        // Top K
-        val topKDef = ParameterDefinitions.CORE_PARAMETERS.find { it.key == "top_k" }!!
-        formBuilder.addLabeledComponent(
-            ParameterLabelComponent(topKDef),
-            topKComponent,
-            1, false
-        )
-        
-        formBuilder.addVerticalGap(20)
-        
-        // 정보 패널
-        val infoPanel = JPanel(BorderLayout())
-        infoPanel.border = JBUI.Borders.compound(
-            JBUI.Borders.empty(10),
-            JBUI.Borders.customLine(JBColor(0xD1C4E9, 0x512DA8), 1)
-        )
-        infoPanel.background = JBColor(0xF3E5F5, 0x4A148C)
-        infoPanel.isOpaque = true
-        
-        val infoLabel = JBLabel("""
-            <html>
-            <b>ℹ️ Parameter Information:</b><br><br>
-            • Hover over parameter labels for detailed explanations<br>
-            • Orange background indicates non-default values<br>
-            • Parameters only apply when enabled<br>
-            • More advanced parameters coming in future updates
-            </html>
-        """.trimIndent())
-        infoLabel.border = JBUI.Borders.empty(10)
-        infoPanel.add(infoLabel, BorderLayout.CENTER)
-        
-        formBuilder.addComponent(infoPanel)
-        formBuilder.addComponentFillVertically(JPanel(), 0)
-        
-        return formBuilder.panel
-    }
-    
-    private fun loadInitialSettings() {
+        // 초기 상태 설정
         enableProxyCheckBox.isSelected = settings.isProxyEnabled
         ollamaBaseUrlField.text = settings.ollamaBaseUrl
         
         // API 키 상태 초기화
         updateApiKeyStatus(String(openRouterApiKeyField.password))
-        
-        // 파라미터 로드
-        loadParametersFromSettings()
-    }
-    
-    private fun loadParametersFromSettings() {
-        temperatureComponent.setValue(settings.paramTemperature)
-        maxTokensComponent.setValue(settings.paramMaxTokens)
-        topPComponent.setValue(settings.paramTopP)
-        topKComponent.setValue(settings.paramTopK)
-    }
-    
-    private fun saveParametersToSettings() {
-        settings.paramTemperature = temperatureComponent.getValue()
-        settings.paramMaxTokens = maxTokensComponent.getValue()
-        settings.paramTopP = topPComponent.getValue()
-        settings.paramTopK = topKComponent.getValue() ?: 0
-        
-        settings.notifyParametersChanged()
-        Messages.showInfoMessage("Parameters saved successfully!", "Saved")
-    }
-    
-    private fun resetParametersToDefaults() {
-        val result = Messages.showYesNoDialog(
-            "Reset all parameters to their default values?",
-            "Reset Parameters",
-            Messages.getQuestionIcon()
-        )
-        
-        if (result == Messages.YES) {
-            settings.resetParametersToDefaults()
-            loadParametersFromSettings()
-            Messages.showInfoMessage("Parameters reset to defaults!", "Reset")
-        }
-    }
-    
-    private fun showPresetMenu(anchor: JComponent) {
-        val popup = JBPopupFactory.getInstance().createComponentPopupBuilder(
-            createPresetMenu(), null
-        ).setTitle("Choose Preset")
-            .setMovable(true)
-            .setResizable(false)
-            .createPopup()
-        
-        popup.showUnderneathOf(anchor)
-    }
-    
-    private fun createPresetMenu(): JComponent {
-        val panel = JPanel()
-        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
-        panel.border = JBUI.Borders.empty(5)
-        
-        ParameterUtils.Presets.getAllPresets().forEach { (name, preset) ->
-            val button = JButton(name)
-            button.addActionListener {
-                settings.setGenerationParameters(preset)
-                settings.lastUsedPreset = name
-                loadParametersFromSettings()
-                
-                // 팝업이 있다면 닫기
-                SwingUtilities.getWindowAncestor(button)?.let { window ->
-                    if (window is JDialog) window.dispose()
-                }
-            }
-            panel.add(button)
-        }
-        
-        return panel
     }
     
     private fun updateApiKeyStatus(apiKey: String) {
@@ -471,6 +139,66 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
                 }
             }
         }.start()
+    }
+
+    private fun createMainPanel(): JPanel {
+        // 설정 안내 패널
+        val guidancePanel = JPanel(BorderLayout())
+        guidancePanel.border = JBUI.Borders.compound(
+            JBUI.Borders.empty(5, 10),
+            JBUI.Borders.customLine(JBColor(0xB3D7FF, 0x4A90E2), 1)
+        )
+        guidancePanel.background = JBColor(0xE8F4FD, 0x2D3748)
+        guidancePanel.isOpaque = true
+        
+        val guidanceLabel = JBLabel("""
+            <html>
+            <b>📋 Setup Guide:</b><br>
+            1. Go to <b>Tools → AI Assistant → Models</b><br>
+            2. Set Ollama URL to: <b>http://localhost:11444</b><br>
+            3. Configure your OpenRouter API key below<br>
+            4. The proxy will route requests between local Ollama and OpenRouter
+            </html>
+        """.trimIndent())
+        guidanceLabel.border = JBUI.Borders.empty(10)
+        guidancePanel.add(guidanceLabel, BorderLayout.CENTER)
+        
+        // API 키 입력 패널 생성
+        val apiKeyPanel = JPanel(BorderLayout())
+        apiKeyPanel.add(openRouterApiKeyField, BorderLayout.CENTER)
+        apiKeyPanel.add(apiKeyStatusLabel, BorderLayout.SOUTH)
+        
+        val mainPanel = FormBuilder.createFormBuilder()
+            .addComponent(guidancePanel, 1)
+            .addVerticalGap(10)
+            .addLabeledComponent(JBLabel("Enter your OpenRouter API Key:"), apiKeyPanel, 1, false)
+            .addLabeledComponent(JBLabel("Ollama Base URL:"), ollamaBaseUrlField, 1, false)
+            .addComponent(enableProxyCheckBox, 1)
+            .addComponent(enableDebugLoggingCheckBox, 1)
+            .addComponent(createModelWhitelistPanel())
+            .addComponentFillVertically(JPanel(), 0)
+            .panel
+        
+        return mainPanel
+    }
+
+    private fun createModelWhitelistPanel(): JPanel {
+        val panel = JPanel(BorderLayout())
+        panel.border = JBUI.Borders.emptyTop(10)
+        
+        // 제목
+        val titlePanel = JPanel(FlowLayout(FlowLayout.LEFT))
+        titlePanel.add(JBLabel("Model Whitelist (if none selected, all models are available):"))
+        titlePanel.add(refreshButton)
+        
+        // 메인 컨텐츠
+        val contentPanel = JPanel(BorderLayout())
+        contentPanel.add(createDualListPanel(), BorderLayout.CENTER)
+        
+        panel.add(titlePanel, BorderLayout.NORTH)
+        panel.add(contentPanel, BorderLayout.CENTER)
+        
+        return panel
     }
 
     private fun createDualListPanel(): JPanel {
@@ -782,13 +510,6 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     
     override fun onSettingsChanged() {
         // 설정 변경 시 추가 작업 (필요시)
-    }
-    
-    override fun onParametersChanged() {
-        // 파라미터 변경 시 UI 업데이트
-        ApplicationManager.getApplication().invokeLater {
-            loadParametersFromSettings()
-        }
     }
     
     // Disposable 구현
