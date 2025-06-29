@@ -44,7 +44,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                                     updateStatus()
                                 }
                             }
-                            .comment("Toggle hybrid mode: local Ollama + OpenRouter models vs local only")
+                            .comment("Toggle between OpenRouter proxy and direct Ollama connection")
                             .component
                     }
                     

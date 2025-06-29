@@ -20,24 +20,19 @@ class ShowInformationAction : AnAction(), DumbAware {
             2. Set Ollama URL to: <b>http://localhost:11444</b><br>
             3. Configure OpenRouter API key in plugin settings<br>
             <br>
-            <b>🎯 Hybrid Feature:</b><br>
-            Access both local Ollama and OpenRouter models in one unified list!<br>
-            • <b>(local)</b> models run on your machine<br>
-            • <b>OpenRouter</b> models run in the cloud<br>
-            <br>
-            <b>🌐 Current Status:</b><br>
+            <b>🌐 Server Status:</b><br>
             ${proxyServer.getDetailedStatus()}<br>
             <br>
             <b>⚙️ Configuration:</b><br>
             • Proxy Server Port: <b>11444</b><br>
             • Local Ollama Port: <b>11434</b><br>
-            • Proxy Mode: <b>${if (settings.isProxyEnabled) "Enabled" else "Disabled"}</b><br>
+            • Proxy Mode: <b>${if (settings.isProxyEnabled) "Enabled" else "Disabled"}</b><br>  
             • API Key: <b>${if (settings.openRouterApiKey.isBlank()) "Not configured" else "Configured"}</b><br>
             • Whitelisted Models: <b>${if (settings.selectedModels.isEmpty()) "All models" else "${settings.selectedModels.size} models"}</b><br>
             <br>
             <b>📖 How it works:</b><br>
-            • <b>Proxy Mode:</b> Hybrid list with local + OpenRouter models<br>
-            • <b>Bypass Mode:</b> Direct connection to local Ollama only<br>
+            • <b>Proxy Mode:</b> Requests to localhost:11444 → OpenRouter.ai<br>
+            • <b>Bypass Mode:</b> Requests to localhost:11444 → localhost:11434<br>
             </html>
         """.trimIndent()
         

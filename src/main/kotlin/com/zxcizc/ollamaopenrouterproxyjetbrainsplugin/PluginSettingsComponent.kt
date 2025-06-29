@@ -157,7 +157,7 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
             1. Go to <b>Tools → AI Assistant → Models</b><br>
             2. Set Ollama URL to: <b>http://localhost:11444</b><br>
             3. Configure your OpenRouter API key below<br>
-            4. Enjoy <b>hybrid access</b> to both local Ollama and OpenRouter models in one list!
+            4. The proxy will route requests between local Ollama and OpenRouter
             </html>
         """.trimIndent())
         guidanceLabel.border = JBUI.Borders.empty(10)
@@ -188,7 +188,7 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         
         // 제목
         val titlePanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        titlePanel.add(JBLabel("Model Whitelist - Hybrid: Local Ollama + OpenRouter (if none selected, all models are available):"))
+        titlePanel.add(JBLabel("Model Whitelist (if none selected, all models are available):"))
         titlePanel.add(refreshButton)
         
         // 메인 컨텐츠
@@ -452,7 +452,11 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         
         // 선택된 모델 리스트 업데이트
         selectedModelsListModel.removeAll()
-        selectedModelsListModel.addAll(0, currentSelected.sorted())
+        if (currentSelected.isEmpty()) {
+            selectedModelsListModel.add("ℹ️ No models whitelisted - all models are available")
+        } else {
+            selectedModelsListModel.addAll(0, currentSelected.sorted())
+        }
         
         // 사용 가능한 모델 리스트 업데이트 (선택된 것 제외)
         filterAvailableModels()

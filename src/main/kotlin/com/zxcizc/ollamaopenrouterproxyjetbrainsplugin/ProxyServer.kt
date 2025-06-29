@@ -119,11 +119,11 @@ class ProxyServer {
         val settings = PluginSettingsState.getInstance()
         
         return when {
-            !settings.isProxyEnabled -> "Mode: Bypass (Local Ollama only at localhost:11434)"
-            settings.openRouterApiKey.isBlank() -> "Mode: Hybrid (OpenRouter API Key Required)"
+            !settings.isProxyEnabled -> "Mode: Bypass (Direct to Ollama at localhost:11434)"
+            settings.openRouterApiKey.isBlank() -> "Mode: Proxy (OpenRouter API Key Required)"
             settings.selectedModels.isNotEmpty() -> 
-                "Mode: Hybrid (${settings.selectedModels.size} models whitelisted from local + OpenRouter)"
-            else -> "Mode: Hybrid (All local Ollama + OpenRouter models available)"
+                "Mode: Proxy (${settings.selectedModels.size} models whitelisted)"
+            else -> "Mode: Proxy (All OpenRouter models available)"
         }
     }
 

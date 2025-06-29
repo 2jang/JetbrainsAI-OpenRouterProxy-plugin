@@ -13,8 +13,8 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-    Provides hybrid access to both local Ollama and OpenRouter.ai models in one unified list.<br>
-    Configure your OpenRouter API key and enjoy seamless switching between local and cloud models.
+    Redirects requests from local Ollama-compatible endpoints to OpenRouter.ai.<br>
+    Configure your OpenRouter API key in the settings and point your AI tools to the proxy address.
     ]]></description>
 
     <!-- Product and plugin compatibility requirements.
