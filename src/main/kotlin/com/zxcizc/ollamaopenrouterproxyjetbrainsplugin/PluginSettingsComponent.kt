@@ -512,11 +512,6 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         // 설정 변경 시 추가 작업 (필요시)
     }
     
-    override fun onParametersChanged() {
-        // 파라미터 변경 시 추가 작업 (필요시)
-        // 예: UI 업데이트, 캐시 무효화 등
-    }
-    
     // Disposable 구현
     override fun dispose() {
         settings.removeListener(this)

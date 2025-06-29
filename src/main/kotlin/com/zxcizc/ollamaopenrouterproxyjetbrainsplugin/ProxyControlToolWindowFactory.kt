@@ -141,11 +141,6 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
         override fun onSettingsChanged() {
             updateStatus()
         }
-        
-        override fun onParametersChanged() {
-            // 파라미터 변경 시 추가 작업 (필요시)
-            updateStatus()
-        }
 
         // Disposable 구현
         override fun dispose() {
