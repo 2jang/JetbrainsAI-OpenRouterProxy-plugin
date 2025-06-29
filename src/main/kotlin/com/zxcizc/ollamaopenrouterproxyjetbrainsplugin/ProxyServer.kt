@@ -1,7 +1,6 @@
 package com.zxcizc.ollamaopenrouterproxyjetbrainsplugin
 
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpHandler
 import com.sun.net.httpserver.HttpServer
@@ -10,7 +9,6 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.Serializable
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.URI
@@ -18,6 +16,32 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+
+// --- 개선: 타입 안정성을 위한 데이터 클래스 정의 ---
+data class OllamaChatRequest(var model: String, val messages: List<OllamaMessage>, val stream: Boolean?)
+data class OllamaMessage(val role: String, val content: String)
+data class OllamaChatChunk(val model: String, val created_at: String, val message: OllamaMessage, val done: Boolean)
+data class OllamaFinalChunk(
+    val model: String, val created_at: String, val message: OllamaMessage, val done: Boolean,
+    val total_duration: Long, val load_duration: Long, val prompt_eval_count: Int,
+    val prompt_eval_duration: Long, val eval_count: Int, val eval_duration: Long
+)
+data class OpenAIChatChunk(val choices: List<Choice>) {
+    data class Choice(val delta: Delta)
+    data class Delta(val role: String?, val content: String?)
+}
+data class OllamaTagResponse(val models: List<OllamaModel>)
+data class OllamaModel(
+    val name: String, val model: String, val modified_at: String, val size: Long,
+    val digest: String, val details: ModelDetails
+)
+data class ModelDetails(
+    val format: String, val family: String, val parameter_size: String, val quantization_level: String
+)
+data class OpenRouterModelsResponse(val data: List<OpenRouterModel>)
+data class OpenRouterModel(val id: String)
+
 
 class ProxyServer {
     private var server: HttpServer? = null
@@ -28,7 +52,6 @@ class ProxyServer {
         val OPENROUTER_CHAT_URL: URL = URI("https://openrouter.ai/api/v1/chat/completions").toURL()
         val OPENROUTER_MODELS_URL: URL = URI("https://openrouter.ai/api/v1/models").toURL()
         const val OLLAMA_IS_RUNNING = "Ollama is running"
-        // 모델 목록 캐시 및 유효 시간(5분)
         val modelCache = ConcurrentHashMap<String, Any>()
         const val CACHE_KEY = "models"
         const val CACHE_DURATION_MS = 5 * 60 * 1000
@@ -42,7 +65,8 @@ class ProxyServer {
             }
             server = HttpServer.create(InetSocketAddress("localhost", PROXY_PORT), 0).apply {
                 createContext("/", UniversalHandler())
-                executor = null
+                // --- 개선: 여러 요청을 동시에 처리하기 위한 스레드 풀 설정 ---
+                executor = Executors.newCachedThreadPool()
                 start()
             }
             log.info("Ollama-OpenRouter Proxy Server started on http://localhost:$PROXY_PORT")
@@ -86,13 +110,14 @@ class ProxyServer {
     private inner class UniversalHandler : HttpHandler {
         private val log: Logger = Logger.getInstance(UniversalHandler::class.java)
         private val chatProxyHandler = ChatProxyHandler()
+        private val gson = Gson()
 
         override fun handle(exchange: HttpExchange) {
             val path = exchange.requestURI.path
             val method = exchange.requestMethod
             if (PluginSettingsState.getInstance().enableDebugLogging) {
                 log.info(">>>> [DEBUG] Received request: $method $path")
-                }
+            }
 
             when {
                 (method == "POST" && (path == "/api/chat" || path == "/v1/chat/completions")) -> chatProxyHandler.handle(exchange)
@@ -140,28 +165,24 @@ class ProxyServer {
         }
 
         private fun convertOpenRouterToOllamaFormat(openRouterJson: String): String {
-            val gson = Gson()
-            val type = object : TypeToken<Map<String, List<Map<String, Any>>>>() {}.type
-            val openRouterResponse: Map<String, List<Map<String, Any>>> = gson.fromJson(openRouterJson, type)
-
-            val ollamaModels = (openRouterResponse["data"] ?: emptyList()).map { openRouterModel ->
-                val modelId = openRouterModel["id"] as? String ?: "unknown"
-                val detailsMap = mapOf(
-                    "format" to "gguf",
-                    "family" to (modelId.split("/").firstOrNull() ?: "unknown"),
-                    "parameter_size" to "N/A",
-                    "quantization_level" to "N/A"
-                )
-                mapOf<String, Serializable>(
-                    "name" to modelId, // ':latest' 제거
-                    "model" to modelId, // ':latest' 제거
-                    "modified_at" to Instant.now().toString(),
-                    "size" to 0L,
-                    "digest" to modelId,
-                    "details" to (detailsMap as Serializable)
+            val openRouterResponse = gson.fromJson(openRouterJson, OpenRouterModelsResponse::class.java)
+            val ollamaModels = openRouterResponse.data.map { openRouterModel ->
+                val modelId = openRouterModel.id
+                OllamaModel(
+                    name = modelId,
+                    model = modelId,
+                    modified_at = Instant.now().toString(),
+                    size = 0L,
+                    digest = modelId,
+                    details = ModelDetails(
+                        format = "gguf",
+                        family = modelId.split("/").firstOrNull() ?: "unknown",
+                        parameter_size = "N/A",
+                        quantization_level = "N/A"
+                    )
                 )
             }
-            return gson.toJson(mapOf("models" to ollamaModels))
+            return gson.toJson(OllamaTagResponse(models = ollamaModels))
         }
     }
 
@@ -181,7 +202,9 @@ class ProxyServer {
                     return
                 }
 
-                val modifiedBody = removeLatestTagFromModel(requestBody)
+                val originalRequest = gson.fromJson(requestBody, OllamaChatRequest::class.java)
+                removeLatestTagFromModel(originalRequest)
+                val modifiedBody = gson.toJson(originalRequest)
 
                 val connection = OPENROUTER_CHAT_URL.openConnection() as HttpURLConnection
                 connection.apply {
@@ -214,7 +237,7 @@ class ProxyServer {
                             if (line.startsWith("data:")) {
                                 val jsonData = line.substring(5).trim()
                                 if (jsonData == "[DONE]") {
-                                    val finalOllamaChunk = createFinalOllamaChunk(modifiedBody)
+                                    val finalOllamaChunk = createFinalOllamaChunk(originalRequest)
                                     if (PluginSettingsState.getInstance().enableDebugLogging) {
                                         log.info(">>>> [DEBUG] Forwarding final chunk: $finalOllamaChunk")
                                     }
@@ -222,7 +245,7 @@ class ProxyServer {
                                     clientResponseStream.flush()
                                     log.info("Stream finished, sent final Ollama chunk.")
                                 } else {
-                                    val ollamaChunk = convertOpenAiToOllamaChunk(jsonData, modifiedBody)
+                                    val ollamaChunk = convertOpenAiToOllamaChunk(jsonData, originalRequest)
                                     if (ollamaChunk != null) {
                                         if (PluginSettingsState.getInstance().enableDebugLogging) {
                                             log.info(">>>> [DEBUG] Forwarding to client: $ollamaChunk")
@@ -249,58 +272,40 @@ class ProxyServer {
             }
         }
 
-        @Suppress("UNCHECKED_CAST")
-        private fun convertOpenAiToOllamaChunk(openAiJson: String, originalRequestBody: String): String? {
-            try {
-                val type = object : TypeToken<Map<String, Any>>() {}.type
-                val openAiMap: Map<String, Any> = gson.fromJson(openAiJson, type)
+        private fun convertOpenAiToOllamaChunk(openAiJson: String, originalRequest: OllamaChatRequest): String? {
+            return try {
+                val openAiChunk = gson.fromJson(openAiJson, OpenAIChatChunk::class.java)
+                val delta = openAiChunk.choices.firstOrNull()?.delta ?: return null
 
-                val choices = openAiMap["choices"] as? List<Map<String, Any>>
-                val delta = choices?.firstOrNull()?.get("delta") as? Map<String, Any>
-                val role = delta?.get("role") as? String ?: "assistant"
-                val content = delta?.get("content")
+                // content가 null이고 role 정보만 있는 첫 청크(메타데이터)는 무시
+                if (delta.content == null && delta.role != null) return null
 
-                // content가 null이고 다른 유의미한 정보(예: tool_calls)도 없으면 청크를 보내지 않을 수 있음.
-                // 하지만 안정성을 위해 빈 content라도 message 객체를 만들어 보내는 것이 좋음.
-                if (content == null && delta?.containsKey("tool_calls") != true) {
-                    // role 정보만 있는 첫 청크 등은 보낼 필요가 없음
-                    if(delta?.size == 1 && delta.containsKey("role")) return null
-                }
-
-                val ollamaMessage = mapOf("role" to role, "content" to (content ?: ""))
-
-                val originalRequestMap: Map<String, Any> = gson.fromJson(originalRequestBody, type)
-
-                val ollamaChunk = mapOf(
-                    "model" to originalRequestMap["model"],
-                    "created_at" to Instant.now().toString(),
-                    "message" to ollamaMessage,
-                    "done" to false
+                val ollamaMessage = OllamaMessage(role = delta.role ?: "assistant", content = delta.content ?: "")
+                val ollamaChunk = OllamaChatChunk(
+                    model = originalRequest.model,
+                    created_at = Instant.now().toString(),
+                    message = ollamaMessage,
+                    done = false
                 )
-                return gson.toJson(ollamaChunk)
+                gson.toJson(ollamaChunk)
             } catch (e: Exception) {
                 log.error("Failed to convert OpenAI chunk to Ollama format: $openAiJson", e)
-                return null
+                null
             }
         }
 
-        private fun createFinalOllamaChunk(originalRequestBody: String): String {
-            val type = object : TypeToken<Map<String, Any>>() {}.type
-            val originalRequestMap: Map<String, Any> = gson.fromJson(originalRequestBody, type)
-
-            // Ollama API 문서의 Final Response 형식을 정확히 모방합니다.
-            val finalChunk = mapOf(
-                "model" to originalRequestMap["model"],
-                "created_at" to Instant.now().toString(),
-                "message" to mapOf("role" to "assistant", "content" to ""), // 비어있는 message 객체 포함
-                "done" to true,
-                // 통계 정보는 OpenRouter 응답에서 얻을 수 없으므로 더미 값으로 채웁니다.
-                "total_duration" to 0,
-                "load_duration" to 0,
-                "prompt_eval_count" to 0,
-                "prompt_eval_duration" to 0,
-                "eval_count" to 0,
-                "eval_duration" to 0
+        private fun createFinalOllamaChunk(originalRequest: OllamaChatRequest): String {
+            val finalChunk = OllamaFinalChunk(
+                model = originalRequest.model,
+                created_at = Instant.now().toString(),
+                message = OllamaMessage(role = "assistant", content = ""), // 비어있는 message 객체 포함
+                done = true,
+                total_duration = 0,
+                load_duration = 0,
+                prompt_eval_count = 0,
+                prompt_eval_duration = 0,
+                eval_count = 0,
+                eval_duration = 0
             )
             return gson.toJson(finalChunk)
         }
@@ -313,22 +318,12 @@ class ProxyServer {
             }
         }
 
-        private fun removeLatestTagFromModel(body: String): String {
-            val gson = Gson()
-            try {
-                val type = object : TypeToken<MutableMap<String, Any>>() {}.type
-                val requestMap: MutableMap<String, Any> = gson.fromJson(body, type)
-                val originalModel = requestMap["model"] as? String
-                if (originalModel != null && originalModel.endsWith(":latest")) {
-                    val newModel = originalModel.removeSuffix(":latest")
-                    requestMap["model"] = newModel
-                    log.info("Model tag removed: '$originalModel' -> '$newModel'")
-                    return gson.toJson(requestMap)
-                }
-            } catch (e: Exception) {
-                log.error("Failed to parse or modify request body for tag removal.", e)
+        private fun removeLatestTagFromModel(request: OllamaChatRequest) {
+            if (request.model.endsWith(":latest")) {
+                val newModel = request.model.removeSuffix(":latest")
+                log.info("Model tag removed: '${request.model}' -> '$newModel'")
+                request.model = newModel
             }
-            return body
         }
     }
 }
