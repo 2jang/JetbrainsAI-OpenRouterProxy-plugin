@@ -6,17 +6,12 @@ import javax.swing.JComponent
 
 class PluginSettingsConfigurable : Configurable {
 
-    // --- 개선: lateinit으로 불필요한 nullable 체크 제거 ---
     private lateinit var mySettingsComponent: PluginSettingsComponent
 
     @Nls(capitalization = Nls.Capitalization.Title)
-    override fun getDisplayName(): String {
-        return "Ollama OpenRouter Proxy"
-    }
+    override fun getDisplayName(): String = "Ollama OpenRouter Proxy"
 
-    override fun getPreferredFocusedComponent(): JComponent {
-        return mySettingsComponent.preferredFocusedComponent
-    }
+    override fun getPreferredFocusedComponent(): JComponent = mySettingsComponent.preferredFocusedComponent
 
     override fun createComponent(): JComponent {
         mySettingsComponent = PluginSettingsComponent()
@@ -26,24 +21,64 @@ class PluginSettingsConfigurable : Configurable {
     override fun isModified(): Boolean {
         val settings = PluginSettingsState.getInstance()
         return mySettingsComponent.openRouterApiKey != settings.openRouterApiKey ||
-                mySettingsComponent.enableDebugLogging != settings.enableDebugLogging
+                mySettingsComponent.ollamaBaseUrl != settings.ollamaBaseUrl ||
+                mySettingsComponent.enableDebugLogging != settings.enableDebugLogging ||
+                mySettingsComponent.isProxyEnabled != settings.isProxyEnabled ||
+                mySettingsComponent.selectedModels != settings.selectedModels ||
+                mySettingsComponent.useCustomParameters != settings.useCustomParameters ||
+                mySettingsComponent.temperature != settings.temperature ||
+                mySettingsComponent.topP != settings.topP ||
+                mySettingsComponent.topK != settings.topK ||
+                mySettingsComponent.maxTokens != settings.maxTokens ||
+                mySettingsComponent.frequencyPenalty != settings.frequencyPenalty ||
+                mySettingsComponent.presencePenalty != settings.presencePenalty ||
+                mySettingsComponent.repetitionPenalty != settings.repetitionPenalty ||
+                mySettingsComponent.seed != settings.seed
     }
 
     override fun apply() {
         val settings = PluginSettingsState.getInstance()
         settings.openRouterApiKey = mySettingsComponent.openRouterApiKey
+        settings.ollamaBaseUrl = mySettingsComponent.ollamaBaseUrl
         settings.enableDebugLogging = mySettingsComponent.enableDebugLogging
+        settings.isProxyEnabled = mySettingsComponent.isProxyEnabled
+        settings.selectedModels = mySettingsComponent.selectedModels.toMutableSet()
+        settings.useCustomParameters = mySettingsComponent.useCustomParameters
+        settings.temperature = mySettingsComponent.temperature
+        settings.topP = mySettingsComponent.topP
+        settings.topK = mySettingsComponent.topK
+        settings.maxTokens = mySettingsComponent.maxTokens
+        settings.frequencyPenalty = mySettingsComponent.frequencyPenalty
+        settings.presencePenalty = mySettingsComponent.presencePenalty
+        settings.repetitionPenalty = mySettingsComponent.repetitionPenalty
+        settings.seed = mySettingsComponent.seed
+        
+        // 설정 변경 시 모델 캐시 무효화 및 리스너 알림
+        ProxyServer.invalidateModelsCache()
+        settings.notifySettingsChanged()
     }
 
     override fun reset() {
         val settings = PluginSettingsState.getInstance()
         mySettingsComponent.openRouterApiKey = settings.openRouterApiKey
+        mySettingsComponent.ollamaBaseUrl = settings.ollamaBaseUrl
         mySettingsComponent.enableDebugLogging = settings.enableDebugLogging
+        mySettingsComponent.isProxyEnabled = settings.isProxyEnabled
+        mySettingsComponent.selectedModels = settings.selectedModels
+        mySettingsComponent.useCustomParameters = settings.useCustomParameters
+        mySettingsComponent.temperature = settings.temperature
+        mySettingsComponent.topP = settings.topP
+        mySettingsComponent.topK = settings.topK
+        mySettingsComponent.maxTokens = settings.maxTokens
+        mySettingsComponent.frequencyPenalty = settings.frequencyPenalty
+        mySettingsComponent.presencePenalty = settings.presencePenalty
+        mySettingsComponent.repetitionPenalty = settings.repetitionPenalty
+        mySettingsComponent.seed = settings.seed
     }
 
     override fun disposeUIResources() {
-        // lateinit 변수는 null로 만들 수 없으므로, UI 리소스 해제가 필요하다면
-        // mySettingsComponent 내부에 별도의 dispose 메서드를 만들어 호출해야 합니다.
-        // 현재는 특별한 해제 로직이 필요하지 않습니다.
+        if (::mySettingsComponent.isInitialized) {
+            mySettingsComponent.dispose()
+        }
     }
 }

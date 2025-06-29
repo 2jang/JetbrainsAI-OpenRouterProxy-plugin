@@ -20,6 +20,7 @@
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
 
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
@@ -33,5 +34,36 @@
         <applicationService
                 serviceImplementation="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.PluginSettingsState"/>
         <postStartupActivity implementation="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.PluginStartupActivity"/>
+        <notificationGroup id="OllamaOpenRouterProxy"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+        <toolWindow
+                id="Ollama Proxy Control"
+                anchor="right"
+                icon="AllIcons.General.Filter"
+                factoryClass="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.ProxyControlToolWindowFactory"/>
     </extensions>
+
+    <actions>
+        <action id="OllamaProxy.ToggleProxy"
+                class="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.ToggleProxyAction"
+                text="Toggle Ollama Proxy"
+                description="Toggle OpenRouter proxy on/off">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        
+        <action id="OllamaProxy.OpenSettings"
+                class="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.OpenSettingsAction"
+                text="Ollama Proxy Settings..."
+                description="Open Ollama OpenRouter Proxy settings">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        
+        <action id="OllamaProxy.ShowInformation"
+                class="com.zxcizc.ollamaopenrouterproxyjetbrainsplugin.ShowInformationAction"
+                text="Ollama Proxy Information..."
+                description="Show Ollama OpenRouter Proxy information and status">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
