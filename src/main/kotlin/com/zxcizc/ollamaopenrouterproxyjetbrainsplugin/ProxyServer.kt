@@ -19,19 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 // --- 타입 안정성을 위한 데이터 클래스 정의 ---
-data class OllamaChatRequest(
-    var model: String, 
-    val messages: List<OllamaMessage>, 
-    val stream: Boolean?,
-    var temperature: Double? = null,
-    var top_p: Double? = null,
-    var top_k: Int? = null,
-    var max_tokens: Int? = null,
-    var frequency_penalty: Double? = null,
-    var presence_penalty: Double? = null,
-    var repetition_penalty: Double? = null,
-    var seed: Int? = null
-)
+data class OllamaChatRequest(var model: String, val messages: List<OllamaMessage>, val stream: Boolean?)
 data class OllamaMessage(val role: String, val content: String)
 data class OllamaChatChunk(val model: String, val created_at: String, val message: OllamaMessage, val done: Boolean)
 data class OllamaFinalChunk(
@@ -120,11 +108,10 @@ class ProxyServer {
     }
     
     fun getStatus(): String {
-        val isRunning = isRunning()
+        val settings = PluginSettingsState.getInstance()
         return when {
-            !isRunning -> "Server: Stopped"
-            PluginSettingsState.getInstance().isProxyEnabled -> "Server: Running (Proxy Mode)"
-            else -> "Server: Running (Bypass Mode)"
+            settings.isProxyEnabled -> "Running (Proxy Mode)"
+            else -> "Running (Bypass Mode)"
         }
     }
     
@@ -132,11 +119,11 @@ class ProxyServer {
         val settings = PluginSettingsState.getInstance()
         
         return when {
-            !settings.isProxyEnabled -> "Mode: Bypass (Direct to Ollama at localhost:11434)"
-            settings.openRouterApiKey.isBlank() -> "Mode: Proxy (OpenRouter API Key Required)"
+            !settings.isProxyEnabled -> "Mode: Bypass (Local Ollama only at localhost:11434)"
+            settings.openRouterApiKey.isBlank() -> "Mode: Hybrid (OpenRouter API Key Required)"
             settings.selectedModels.isNotEmpty() -> 
-                "Mode: Proxy (${settings.selectedModels.size} models whitelisted)"
-            else -> "Mode: Proxy (All OpenRouter models available)"
+                "Mode: Hybrid (${settings.selectedModels.size} models whitelisted from local + OpenRouter)"
+            else -> "Mode: Hybrid (All local Ollama + OpenRouter models available)"
         }
     }
 
@@ -534,10 +521,7 @@ class ProxyServer {
                 
                 // OpenRouter로 요청 전송
                 removeLatestTagFromModel(originalRequest)
-                
-                // 커스텀 파라미터 적용
-                val modifiedRequest = applyCustomParameters(originalRequest)
-                val modifiedBody = gson.toJson(modifiedRequest)
+                val modifiedBody = gson.toJson(originalRequest)
 
                 val connection = OPENROUTER_CHAT_URL.openConnection() as HttpURLConnection
                 connection.apply {
@@ -608,10 +592,7 @@ class ProxyServer {
             // (local) 접두사 제거
             val localModelName = originalRequest.model.removePrefix("(local) ")
             originalRequest.model = localModelName
-            
-            // 커스텀 파라미터 적용 (로컬 요청에도)
-            val modifiedRequest = applyCustomParameters(originalRequest)
-            val modifiedBody = gson.toJson(modifiedRequest)
+            val modifiedBody = gson.toJson(originalRequest)
             
             var ollamaConnection: HttpURLConnection? = null
             try {
@@ -705,26 +686,6 @@ class ProxyServer {
                 log.info("Model tag removed: '${request.model}' -> '$newModel'")
                 request.model = newModel
             }
-        }
-        
-        private fun applyCustomParameters(request: OllamaChatRequest): OllamaChatRequest {
-            val settings = PluginSettingsState.getInstance()
-            
-            if (!settings.useCustomParameters) {
-                return request
-            }
-            
-            // 커스텀 파라미터 적용
-            return request.copy(
-                temperature = if (settings.temperature != 1.0) settings.temperature else null,
-                top_p = if (settings.topP != 1.0) settings.topP else null,
-                top_k = if (settings.topK != 0) settings.topK else null,
-                max_tokens = if (settings.maxTokens != 1000) settings.maxTokens else null,
-                frequency_penalty = if (settings.frequencyPenalty != 0.0) settings.frequencyPenalty else null,
-                presence_penalty = if (settings.presencePenalty != 0.0) settings.presencePenalty else null,
-                repetition_penalty = if (settings.repetitionPenalty != 1.0) settings.repetitionPenalty else null,
-                seed = settings.seed
-            )
         }
     }
 }

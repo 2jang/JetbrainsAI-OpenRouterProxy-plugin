@@ -24,16 +24,7 @@ class PluginSettingsConfigurable : Configurable {
                 mySettingsComponent.ollamaBaseUrl != settings.ollamaBaseUrl ||
                 mySettingsComponent.enableDebugLogging != settings.enableDebugLogging ||
                 mySettingsComponent.isProxyEnabled != settings.isProxyEnabled ||
-                mySettingsComponent.selectedModels != settings.selectedModels ||
-                mySettingsComponent.useCustomParameters != settings.useCustomParameters ||
-                mySettingsComponent.temperature != settings.temperature ||
-                mySettingsComponent.topP != settings.topP ||
-                mySettingsComponent.topK != settings.topK ||
-                mySettingsComponent.maxTokens != settings.maxTokens ||
-                mySettingsComponent.frequencyPenalty != settings.frequencyPenalty ||
-                mySettingsComponent.presencePenalty != settings.presencePenalty ||
-                mySettingsComponent.repetitionPenalty != settings.repetitionPenalty ||
-                mySettingsComponent.seed != settings.seed
+                mySettingsComponent.selectedModels != settings.selectedModels
     }
 
     override fun apply() {
@@ -43,15 +34,6 @@ class PluginSettingsConfigurable : Configurable {
         settings.enableDebugLogging = mySettingsComponent.enableDebugLogging
         settings.isProxyEnabled = mySettingsComponent.isProxyEnabled
         settings.selectedModels = mySettingsComponent.selectedModels.toMutableSet()
-        settings.useCustomParameters = mySettingsComponent.useCustomParameters
-        settings.temperature = mySettingsComponent.temperature
-        settings.topP = mySettingsComponent.topP
-        settings.topK = mySettingsComponent.topK
-        settings.maxTokens = mySettingsComponent.maxTokens
-        settings.frequencyPenalty = mySettingsComponent.frequencyPenalty
-        settings.presencePenalty = mySettingsComponent.presencePenalty
-        settings.repetitionPenalty = mySettingsComponent.repetitionPenalty
-        settings.seed = mySettingsComponent.seed
         
         // 설정 변경 시 모델 캐시 무효화 및 리스너 알림
         ProxyServer.invalidateModelsCache()
@@ -65,15 +47,6 @@ class PluginSettingsConfigurable : Configurable {
         mySettingsComponent.enableDebugLogging = settings.enableDebugLogging
         mySettingsComponent.isProxyEnabled = settings.isProxyEnabled
         mySettingsComponent.selectedModels = settings.selectedModels
-        mySettingsComponent.useCustomParameters = settings.useCustomParameters
-        mySettingsComponent.temperature = settings.temperature
-        mySettingsComponent.topP = settings.topP
-        mySettingsComponent.topK = settings.topK
-        mySettingsComponent.maxTokens = settings.maxTokens
-        mySettingsComponent.frequencyPenalty = settings.frequencyPenalty
-        mySettingsComponent.presencePenalty = settings.presencePenalty
-        mySettingsComponent.repetitionPenalty = settings.repetitionPenalty
-        mySettingsComponent.seed = settings.seed
     }
 
     override fun disposeUIResources() {

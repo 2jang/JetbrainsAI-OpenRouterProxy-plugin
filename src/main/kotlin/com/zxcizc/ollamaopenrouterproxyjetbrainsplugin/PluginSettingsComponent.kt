@@ -10,9 +10,9 @@ import com.intellij.ui.components.*
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.CollectionListModel
-import com.intellij.ui.JBColor
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import com.intellij.ui.JBColor
 import com.intellij.util.ui.UIUtil
 import java.awt.*
 import java.awt.event.ActionListener
@@ -144,18 +144,23 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     private fun createMainPanel(): JPanel {
         // 설정 안내 패널
         val guidancePanel = JPanel(BorderLayout())
-        guidancePanel.border = JBUI.Borders.empty(5, 10)
+        guidancePanel.border = JBUI.Borders.compound(
+            JBUI.Borders.empty(5, 10),
+            JBUI.Borders.customLine(JBColor(0xB3D7FF, 0x4A90E2), 1)
+        )
+        guidancePanel.background = JBColor(0xE8F4FD, 0x2D3748)
+        guidancePanel.isOpaque = true
+        
         val guidanceLabel = JBLabel("""
             <html>
-            <div style='background-color: #E8F4FD; padding: 10px; border: 1px solid #B3D7FF; border-radius: 4px;'>
             <b>📋 Setup Guide:</b><br>
             1. Go to <b>Tools → AI Assistant → Models</b><br>
             2. Set Ollama URL to: <b>http://localhost:11444</b><br>
             3. Configure your OpenRouter API key below<br>
-            4. The proxy will route requests between local Ollama and OpenRouter
-            </div>
+            4. Enjoy <b>hybrid access</b> to both local Ollama and OpenRouter models in one list!
             </html>
         """.trimIndent())
+        guidanceLabel.border = JBUI.Borders.empty(10)
         guidancePanel.add(guidanceLabel, BorderLayout.CENTER)
         
         // API 키 입력 패널 생성
@@ -170,149 +175,11 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
             .addLabeledComponent(JBLabel("Ollama Base URL:"), ollamaBaseUrlField, 1, false)
             .addComponent(enableProxyCheckBox, 1)
             .addComponent(enableDebugLoggingCheckBox, 1)
-            .addComponent(createParametersPanel())
             .addComponent(createModelWhitelistPanel())
             .addComponentFillVertically(JPanel(), 0)
             .panel
         
         return mainPanel
-    }
-    
-    private fun createParametersPanel(): JPanel {
-        val panel = JPanel(BorderLayout())
-        panel.border = JBUI.Borders.emptyTop(10)
-        
-        // 제목과 체크박스
-        val titlePanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        val useCustomParamsCheckBox = JBCheckBox("Use Custom OpenRouter Parameters", settings.useCustomParameters)
-        useCustomParamsCheckBox.addActionListener {
-            settings.useCustomParameters = useCustomParamsCheckBox.isSelected
-            updateParameterFieldsState()
-        }
-        titlePanel.add(useCustomParamsCheckBox)
-        
-        // 파라미터 입력 패널
-        val parametersPanel = JPanel(GridBagLayout())
-        val gbc = GridBagConstraints()
-        gbc.insets = JBUI.insets(2, 5)
-        gbc.anchor = GridBagConstraints.WEST
-        
-        // Temperature
-        gbc.gridx = 0; gbc.gridy = 0
-        parametersPanel.add(JBLabel("Temperature (0.0-2.0):"), gbc)
-        gbc.gridx = 1
-        val temperatureSpinner = JSpinner(SpinnerNumberModel(settings.temperature, 0.0, 2.0, 0.1))
-        temperatureSpinner.addChangeListener { settings.temperature = temperatureSpinner.value as Double }
-        parametersPanel.add(temperatureSpinner, gbc)
-        
-        // Top P
-        gbc.gridx = 0; gbc.gridy = 1
-        parametersPanel.add(JBLabel("Top P (0.0-1.0):"), gbc)
-        gbc.gridx = 1
-        val topPSpinner = JSpinner(SpinnerNumberModel(settings.topP, 0.0, 1.0, 0.1))
-        topPSpinner.addChangeListener { settings.topP = topPSpinner.value as Double }
-        parametersPanel.add(topPSpinner, gbc)
-        
-        // Top K
-        gbc.gridx = 0; gbc.gridy = 2
-        parametersPanel.add(JBLabel("Top K:"), gbc)
-        gbc.gridx = 1
-        val topKSpinner = JSpinner(SpinnerNumberModel(settings.topK, 0, 100, 1))
-        topKSpinner.addChangeListener { settings.topK = topKSpinner.value as Int }
-        parametersPanel.add(topKSpinner, gbc)
-        
-        // Max Tokens
-        gbc.gridx = 0; gbc.gridy = 3
-        parametersPanel.add(JBLabel("Max Tokens:"), gbc)
-        gbc.gridx = 1
-        val maxTokensSpinner = JSpinner(SpinnerNumberModel(settings.maxTokens, 1, 4096, 1))
-        maxTokensSpinner.addChangeListener { settings.maxTokens = maxTokensSpinner.value as Int }
-        parametersPanel.add(maxTokensSpinner, gbc)
-        
-        // Frequency Penalty
-        gbc.gridx = 0; gbc.gridy = 4
-        parametersPanel.add(JBLabel("Frequency Penalty (-2.0-2.0):"), gbc)
-        gbc.gridx = 1
-        val frequencyPenaltySpinner = JSpinner(SpinnerNumberModel(settings.frequencyPenalty, -2.0, 2.0, 0.1))
-        frequencyPenaltySpinner.addChangeListener { settings.frequencyPenalty = frequencyPenaltySpinner.value as Double }
-        parametersPanel.add(frequencyPenaltySpinner, gbc)
-        
-        // Presence Penalty
-        gbc.gridx = 0; gbc.gridy = 5
-        parametersPanel.add(JBLabel("Presence Penalty (-2.0-2.0):"), gbc)
-        gbc.gridx = 1
-        val presencePenaltySpinner = JSpinner(SpinnerNumberModel(settings.presencePenalty, -2.0, 2.0, 0.1))
-        presencePenaltySpinner.addChangeListener { settings.presencePenalty = presencePenaltySpinner.value as Double }
-        parametersPanel.add(presencePenaltySpinner, gbc)
-        
-        // Repetition Penalty
-        gbc.gridx = 0; gbc.gridy = 6
-        parametersPanel.add(JBLabel("Repetition Penalty (0.0-2.0):"), gbc)
-        gbc.gridx = 1
-        val repetitionPenaltySpinner = JSpinner(SpinnerNumberModel(settings.repetitionPenalty, 0.0, 2.0, 0.1))
-        repetitionPenaltySpinner.addChangeListener { settings.repetitionPenalty = repetitionPenaltySpinner.value as Double }
-        parametersPanel.add(repetitionPenaltySpinner, gbc)
-        
-        // Seed
-        gbc.gridx = 0; gbc.gridy = 7
-        parametersPanel.add(JBLabel("Seed (optional):"), gbc)
-        gbc.gridx = 1
-        val seedField = JBTextField(settings.seed?.toString() ?: "")
-        seedField.document.addDocumentListener(object : DocumentAdapter() {
-            override fun textChanged(e: DocumentEvent) {
-                settings.seed = seedField.text.toIntOrNull()
-            }
-        })
-        parametersPanel.add(seedField, gbc)
-        
-        // 리셋 버튼
-        gbc.gridx = 0; gbc.gridy = 8; gbc.gridwidth = 2
-        val resetButton = JButton("Reset to Defaults")
-        resetButton.addActionListener {
-            settings.temperature = 1.0
-            settings.topP = 1.0
-            settings.topK = 0
-            settings.maxTokens = 1000
-            settings.frequencyPenalty = 0.0
-            settings.presencePenalty = 0.0
-            settings.repetitionPenalty = 1.0
-            settings.seed = null
-            
-            // UI 업데이트
-            temperatureSpinner.value = 1.0
-            topPSpinner.value = 1.0
-            topKSpinner.value = 0
-            maxTokensSpinner.value = 1000
-            frequencyPenaltySpinner.value = 0.0
-            presencePenaltySpinner.value = 0.0
-            repetitionPenaltySpinner.value = 1.0
-            seedField.text = ""
-        }
-        parametersPanel.add(resetButton, gbc)
-        
-        // 파라미터 필드들을 멤버 변수로 저장 (상태 업데이트용)
-        parameterComponents = listOf(
-            temperatureSpinner, topPSpinner, topKSpinner, maxTokensSpinner,
-            frequencyPenaltySpinner, presencePenaltySpinner, repetitionPenaltySpinner,
-            seedField, resetButton
-        )
-        
-        panel.add(titlePanel, BorderLayout.NORTH)
-        panel.add(parametersPanel, BorderLayout.CENTER)
-        
-        // 초기 상태 설정
-        updateParameterFieldsState()
-        
-        return panel
-    }
-    
-    private lateinit var parameterComponents: List<JComponent>
-    
-    private fun updateParameterFieldsState() {
-        val enabled = settings.useCustomParameters
-        if (::parameterComponents.isInitialized) {
-            parameterComponents.forEach { it.isEnabled = enabled }
-        }
     }
 
     private fun createModelWhitelistPanel(): JPanel {
@@ -321,7 +188,7 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         
         // 제목
         val titlePanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        titlePanel.add(JBLabel("Model Whitelist (if none selected, all models are available):"))
+        titlePanel.add(JBLabel("Model Whitelist - Hybrid: Local Ollama + OpenRouter (if none selected, all models are available):"))
         titlePanel.add(refreshButton)
         
         // 메인 컨텐츠
@@ -340,23 +207,22 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
         // 왼쪽 패널 (사용 가능한 모델들)
         val leftPanel = JPanel(BorderLayout())
         leftPanel.border = JBUI.Borders.empty(5)
-        leftPanel.add(JBLabel("Available Models:"), BorderLayout.NORTH)
-        leftPanel.add(availableModelsSearchField, BorderLayout.NORTH)
         
-        val leftListPanel = JPanel(BorderLayout())
-        leftListPanel.add(availableModelsSearchField, BorderLayout.NORTH)
-        leftListPanel.add(JBScrollPane(availableModelsList), BorderLayout.CENTER)
-        leftPanel.add(leftListPanel, BorderLayout.CENTER)
+        val leftTopPanel = JPanel(BorderLayout())
+        leftTopPanel.add(JBLabel("Available Models:"), BorderLayout.NORTH)
+        leftTopPanel.add(availableModelsSearchField, BorderLayout.SOUTH)
+        leftPanel.add(leftTopPanel, BorderLayout.NORTH)
+        leftPanel.add(JBScrollPane(availableModelsList), BorderLayout.CENTER)
         
         // 오른쪽 패널 (선택된 모델들)
         val rightPanel = JPanel(BorderLayout())
         rightPanel.border = JBUI.Borders.empty(5)
-        rightPanel.add(JBLabel("Whitelisted Models:"), BorderLayout.NORTH)
         
-        val rightListPanel = JPanel(BorderLayout())
-        rightListPanel.add(selectedModelsSearchField, BorderLayout.NORTH)
-        rightListPanel.add(JBScrollPane(selectedModelsList), BorderLayout.CENTER)
-        rightPanel.add(rightListPanel, BorderLayout.CENTER)
+        val rightTopPanel = JPanel(BorderLayout())
+        rightTopPanel.add(JBLabel("Whitelisted Models:"), BorderLayout.NORTH)
+        rightTopPanel.add(selectedModelsSearchField, BorderLayout.SOUTH)
+        rightPanel.add(rightTopPanel, BorderLayout.NORTH)
+        rightPanel.add(JBScrollPane(selectedModelsList), BorderLayout.CENTER)
         
         // 중간 버튼 패널
         val buttonPanel = JPanel(GridBagLayout())
@@ -627,61 +493,6 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
             if (allAvailableModels.isNotEmpty()) {
                 updateModelLists()
             }
-        }
-    
-    // 파라미터 getter/setter (설정에서 직접 관리되므로 별도 UI 없음)
-    var useCustomParameters: Boolean
-        get() = settings.useCustomParameters
-        set(value) {
-            settings.useCustomParameters = value
-        }
-    
-    var temperature: Double
-        get() = settings.temperature
-        set(value) {
-            settings.temperature = value
-        }
-    
-    var topP: Double
-        get() = settings.topP
-        set(value) {
-            settings.topP = value
-        }
-        
-    var topK: Int
-        get() = settings.topK
-        set(value) {
-            settings.topK = value
-        }
-        
-    var maxTokens: Int
-        get() = settings.maxTokens
-        set(value) {
-            settings.maxTokens = value
-        }
-        
-    var frequencyPenalty: Double
-        get() = settings.frequencyPenalty
-        set(value) {
-            settings.frequencyPenalty = value
-        }
-        
-    var presencePenalty: Double
-        get() = settings.presencePenalty
-        set(value) {
-            settings.presencePenalty = value
-        }
-        
-    var repetitionPenalty: Double
-        get() = settings.repetitionPenalty
-        set(value) {
-            settings.repetitionPenalty = value
-        }
-        
-    var seed: Int?
-        get() = settings.seed
-        set(value) {
-            settings.seed = value
         }
     
     // SettingsChangeListener 구현

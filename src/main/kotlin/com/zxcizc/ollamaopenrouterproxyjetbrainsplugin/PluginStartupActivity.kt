@@ -56,6 +56,8 @@ class PluginStartupActivity : ProjectActivity {
                 2. Set Ollama URL to: <b>http://localhost:11444</b><br>
                 3. Configure your OpenRouter API key in plugin settings<br>
                 <br>
+                <b>🎯 Hybrid Feature:</b> Access both local Ollama and OpenRouter models in one unified list!<br>
+                <br>
                 <i>The proxy server is now running on port 11444</i>
                 </html>
                 """.trimIndent(),

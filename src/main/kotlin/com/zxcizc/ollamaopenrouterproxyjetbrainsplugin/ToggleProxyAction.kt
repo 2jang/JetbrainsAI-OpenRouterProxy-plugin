@@ -19,9 +19,9 @@ class ToggleProxyAction : DumbAwareToggleAction() {
 
         val title = "Ollama OpenRouter Proxy"
         val message = if (state) {
-            "Proxy enabled. Requests will be sent to OpenRouter."
+            "Hybrid mode enabled. Access both local Ollama and OpenRouter models!"
         } else {
-            "Proxy disabled. Requests will bypass to localhost:11434."
+            "Hybrid mode disabled. Using local Ollama only at localhost:11434."
         }
 
         Notifications.Bus.notify(Notification("OllamaOpenRouterProxy", title, message, NotificationType.INFORMATION))
@@ -32,11 +32,11 @@ class ToggleProxyAction : DumbAwareToggleAction() {
         val selected = isSelected(e)
         val presentation = e.presentation
         if (selected) {
-            presentation.text = "Proxy: OpenRouter"
-            presentation.description = "Click to disable proxy and bypass to local Ollama"
+            presentation.text = "Hybrid Mode: Enabled"
+            presentation.description = "Click to disable hybrid mode and use local Ollama only"
         } else {
-            presentation.text = "Proxy: Bypass"
-            presentation.description = "Click to enable OpenRouter proxy"
+            presentation.text = "Hybrid Mode: Disabled"
+            presentation.description = "Click to enable hybrid mode (local Ollama + OpenRouter)"
         }
     }
 }
