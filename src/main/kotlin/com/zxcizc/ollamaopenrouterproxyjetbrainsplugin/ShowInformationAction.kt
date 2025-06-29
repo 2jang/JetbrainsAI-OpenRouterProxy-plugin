@@ -26,22 +26,9 @@ class ShowInformationAction : AnAction(), DumbAware {
             <b>⚙️ Configuration:</b><br>
             • Proxy Server Port: <b>11444</b><br>
             • Local Ollama Port: <b>11434</b><br>
-            • Proxy Mode: <b>${if (settings.isProxyEnabled) "Enabled" else "Disabled"}</b><br>
+            • Proxy Mode: <b>${if (settings.isProxyEnabled) "Enabled" else "Disabled"}</b><br>  
             • API Key: <b>${if (settings.openRouterApiKey.isBlank()) "Not configured" else "Configured"}</b><br>
             • Whitelisted Models: <b>${if (settings.selectedModels.isEmpty()) "All models" else "${settings.selectedModels.size} models"}</b><br>
-            • Custom Parameters: <b>${if (settings.useCustomParameters) "Enabled" else "Disabled"}</b><br>
-            <br>
-            <b>🎛️ Parameters:</b><br>
-            ${if (settings.useCustomParameters) """
-            • Temperature: <b>${settings.temperature}</b><br>
-            • Top P: <b>${settings.topP}</b><br>
-            • Top K: <b>${settings.topK}</b><br>
-            • Max Tokens: <b>${settings.maxTokens}</b><br>
-            • Frequency Penalty: <b>${settings.frequencyPenalty}</b><br>
-            • Presence Penalty: <b>${settings.presencePenalty}</b><br>
-            • Repetition Penalty: <b>${settings.repetitionPenalty}</b><br>
-            • Seed: <b>${settings.seed ?: "Not set"}</b><br>
-            """ else "Using default OpenRouter parameters<br>"}
             <br>
             <b>📖 How it works:</b><br>
             • <b>Proxy Mode:</b> Requests to localhost:11444 → OpenRouter.ai<br>

@@ -18,17 +18,6 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState> {
     var ollamaBaseUrl: String = "http://localhost:11434"
     var selectedModels: MutableSet<String> = mutableSetOf()
     
-    // OpenRouter API 파라미터들
-    var temperature: Double = 1.0
-    var topP: Double = 1.0
-    var topK: Int = 0
-    var maxTokens: Int = 1000
-    var frequencyPenalty: Double = 0.0
-    var presencePenalty: Double = 0.0
-    var repetitionPenalty: Double = 1.0
-    var seed: Int? = null
-    var useCustomParameters: Boolean = false
-    
     // 프록시 활성화 상태를 위한 백킹 필드 (기본값: true)
     private var _isProxyEnabled: Boolean = true
     
