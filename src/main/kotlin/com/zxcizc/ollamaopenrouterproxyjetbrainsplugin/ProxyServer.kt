@@ -121,9 +121,7 @@ class ProxyServer {
         return when {
             !settings.isProxyEnabled -> "Mode: Bypass (Direct to Ollama at localhost:11434)"
             settings.openRouterApiKey.isBlank() -> "Mode: Proxy (OpenRouter API Key Required)"
-            settings.selectedModels.isNotEmpty() -> 
-                "Mode: Proxy (${settings.selectedModels.size} models whitelisted)"
-            else -> "Mode: Proxy (All OpenRouter models available)"
+            else -> "Mode: Proxy (OpenRouter + Ollama)"
         }
     }
 
