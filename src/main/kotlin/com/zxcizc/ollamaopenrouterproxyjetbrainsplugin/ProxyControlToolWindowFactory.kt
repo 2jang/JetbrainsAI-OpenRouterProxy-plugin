@@ -121,7 +121,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                 // 상태에 따라 색상 변경 (Stopped 제거)
                 statusLabel.foreground = when {
                     newStatusText.contains("Bypass") -> JBColor.GRAY
-                    newStatusText.contains("API Key Required") -> JBColor.ORANGE
+                    newStatusText.contains("API Key Required") -> JBColor(Color(236, 172, 0), Color(255, 232, 138)) // 라이트: 어두운 노랑, 다크: 밝은 노랑
                     newStatusText.contains("Proxy") -> JBColor(Color.BLUE, Color(135, 206, 235)) // 라이트: 파랑, 다크: 스카이블루
                     else -> JBColor.foreground()
                 }
