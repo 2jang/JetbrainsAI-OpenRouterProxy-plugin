@@ -342,6 +342,11 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     private fun moveSelectedToWhitelist() {
         val selected = availableModelsList.selectedValuesList
         if (selected.isNotEmpty()) {
+            // 더미 메시지가 있다면 제거
+            if (selectedModelsListModel.size > 0 && selectedModelsListModel.items[0].startsWith("ℹ️")) {
+                selectedModelsListModel.remove(0)
+            }
+            
             selected.forEach { model ->
                 availableModelsListModel.remove(model)
                 selectedModelsListModel.add(model)
@@ -352,6 +357,11 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     }
 
     private fun moveAllToWhitelist() {
+        // 더미 메시지가 있다면 제거
+        if (selectedModelsListModel.size > 0 && selectedModelsListModel.items[0].startsWith("ℹ️")) {
+            selectedModelsListModel.remove(0)
+        }
+        
         val allAvailable = availableModelsListModel.toList()
         allAvailable.forEach { model ->
             availableModelsListModel.remove(model)
@@ -390,7 +400,8 @@ class PluginSettingsComponent : PluginSettingsState.SettingsChangeListener, Disp
     }
 
     private fun updateModelsInSettings() {
-        settings.selectedModels = selectedModelsListModel.toList().toMutableSet()
+        val modelsToSave = selectedModelsListModel.toList().filter { !it.startsWith("ℹ️") }.toMutableSet()
+        settings.selectedModels = modelsToSave
         // 화이트리스트 변경 시 모델 캐시 무효화
         ProxyServer.invalidateModelsCache()
     }
