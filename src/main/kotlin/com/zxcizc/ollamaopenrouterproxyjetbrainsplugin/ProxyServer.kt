@@ -356,13 +356,13 @@ class ProxyServer {
         private val gson = Gson()
 
         fun handle(exchange: HttpExchange) {
-            val settings = PluginSettingsState.getInstance()
-            var requestBody: String? = null
-
+            var headersSent = false
+            var requestBodyForLogging: String? = null
             try {
-                // 요청 본문을 먼저 읽음
-                requestBody = readRequestBody(exchange)
+                val requestBody = readRequestBody(exchange)
+                requestBodyForLogging = requestBody // For logging in case of error
 
+                val settings = PluginSettingsState.getInstance()
                 if (settings.enableDebugLogging) {
                     log.info("--- REQUEST from Client ---\nPath: ${exchange.requestURI.path}\nHeaders: ${exchange.requestHeaders.entries}\nBody: $requestBody")
                 }
@@ -376,26 +376,37 @@ class ProxyServer {
                     return
                 }
 
-                val isLocalModel = modelName.startsWith("(local)")
-
+                // *** CENTRALIZED PARAMETER OVERRIDE LOGIC ***
                 if (settings.overrideParameters) {
+                    log.info("Parameter override is ENABLED. Applying overrides...")
                     applyParameterOverrides(requestMap, settings.activeParameters)
+                } else {
+                    log.info("Parameter override is DISABLED.")
                 }
 
+                val isLocalModel = modelName.startsWith("(local)")
+
                 if (settings.isProxyEnabled && !isLocalModel) {
-                    handleOpenRouterRequest(exchange, requestMap, modelName, settings)
+                    // OpenRouter
+                    handleOpenRouterRequest(exchange, requestMap, settings)
                 } else {
-                    val localModelName = if (isLocalModel) modelName.removePrefix("(local) ") else modelName
-                    requestMap["model"] = localModelName
+                    // Local Ollama
+                    if (isLocalModel) {
+                        requestMap["model"] = modelName.removePrefix("(local) ")
+                    }
                     forwardToLocalOllama(exchange, requestMap)
                 }
             } catch (e: Exception) {
-                log.error("Error during proxying request. Initial request body: $requestBody", e)
-                sendJsonResponse(exchange, 500, "{\"error\": \"Internal proxy error: ${e.message?.replace("\"", "'")}\"}")
+                log.error("Error during proxying request. Initial request body: $requestBodyForLogging", e)
+                if (!headersSent) {
+                    sendJsonResponse(exchange, 500, "{\"error\": \"Internal proxy error: ${e.message?.replace("\"", "'")}\"}")
+                }
             }
         }
 
-        private fun handleOpenRouterRequest(exchange: HttpExchange, requestMap: MutableMap<String, Any>, modelName: String, settings: PluginSettingsState) {
+        // *** FIX: Simplified signature, it already has the final requestMap ***
+        private fun handleOpenRouterRequest(exchange: HttpExchange, requestMap: MutableMap<String, Any>, settings: PluginSettingsState) {
+            val modelName = requestMap["model"] as? String ?: ""
             if (settings.openRouterApiKey.isBlank()) {
                 sendJsonResponse(exchange, 401, "{\"error\": \"OpenRouter API Key is not configured.\"}")
                 return
@@ -405,12 +416,11 @@ class ProxyServer {
                 return
             }
 
-            if ((requestMap["model"] as String).endsWith(":latest")) {
-                requestMap["model"] = (requestMap["model"] as String).removeSuffix(":latest")
+            if (modelName.endsWith(":latest")) {
+                requestMap["model"] = modelName.removeSuffix(":latest")
             }
 
             val modifiedBody = gson.toJson(requestMap)
-
             if (settings.enableDebugLogging) {
                 log.info("--- REQUEST to OpenRouter ---\nURL: ${OPENROUTER_CHAT_URL}\nBody: $modifiedBody")
             }
@@ -430,25 +440,21 @@ class ProxyServer {
 
             val responseCode = connection.responseCode
 
-            // 헤더 복사 및 전송
             connection.headerFields.forEach { key, values -> if (key != null) exchange.responseHeaders.put(key, values) }
             exchange.sendResponseHeaders(responseCode, 0)
 
-            // 스트리밍을 망가뜨리지 않고 로깅
             val responseStream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
             val (loggingStream, originalStream) = teeInputStream(responseStream)
 
-            // 로그 기록용 스레드
             Thread {
                 if (settings.enableDebugLogging) {
                     val responseBodyForLogging = loggingStream.bufferedReader().readText()
                     log.info("--- RESPONSE from OpenRouter ---\nStatus: $responseCode\nHeaders: ${connection.headerFields}\nBody: $responseBodyForLogging")
                 } else {
-                    loggingStream.readBytes() // 스트림을 소모해야 함
+                    loggingStream.readBytes()
                 }
             }.start()
 
-            // 실제 응답 스트림을 클라이언트로 전달
             exchange.responseBody.use { clientResponseStream ->
                 originalStream.use { serverResponseStream ->
                     val reader = BufferedReader(InputStreamReader(serverResponseStream, StandardCharsets.UTF_8))
@@ -456,8 +462,7 @@ class ProxyServer {
                         if (line.startsWith("data:")) {
                             val jsonData = line.substring(5).trim()
                             if (jsonData == "[DONE]") {
-                                val finalChunk = createFinalOllamaChunk(modelName)
-                                clientResponseStream.write((finalChunk + "\n").toByteArray(StandardCharsets.UTF_8))
+                                clientResponseStream.write((createFinalOllamaChunk(modelName) + "\n").toByteArray(StandardCharsets.UTF_8))
                             } else {
                                 convertOpenAiToOllamaChunk(jsonData, modelName)?.let {
                                     clientResponseStream.write((it + "\n").toByteArray(StandardCharsets.UTF_8))
@@ -471,6 +476,9 @@ class ProxyServer {
 
         private fun forwardToLocalOllama(exchange: HttpExchange, requestMap: Map<String, Any>) {
             val modifiedBody = gson.toJson(requestMap)
+            if (PluginSettingsState.getInstance().enableDebugLogging) {
+                log.info("--- REQUEST to Local Ollama ---\nURL: ${PluginSettingsState.getInstance().ollamaBaseUrl}/api/chat\nBody: $modifiedBody")
+            }
             var ollamaConnection: HttpURLConnection? = null
             val baseUrl = PluginSettingsState.getInstance().ollamaBaseUrl.removeSuffix("/")
             try {

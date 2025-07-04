@@ -92,12 +92,14 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                 }
                 group("Parameters") {
                     row {
-                        overrideCheckBox = checkBox("Override model parameters")
-                            .bindSelected(settings::overrideParameters)
-                            .onChanged {
-                                toggleAllComponents(it.isSelected)
-                                settings.notifySettingsChanged()
-                            }.component
+                        overrideCheckBox = JCheckBox("Override model parameters")
+                        overrideCheckBox.isSelected = settings.overrideParameters
+                        overrideCheckBox.addActionListener {
+                            settings.overrideParameters = overrideCheckBox.isSelected
+                            toggleAllComponents(overrideCheckBox.isSelected)
+                            settings.notifySettingsChanged()
+                        }
+                        cell(overrideCheckBox)
                     }
                     addPresetManagementRows(this)
 
@@ -223,48 +225,44 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
         }
 
         private fun updateAllUiFromState() {
-            // This function is the same as the previous version
-            temperatureSlider.value = (settings.activeParameters.temperature?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+            temperatureSlider.value = (settings.activeParameters.temperature ?: 1.0).times(100).toInt()
             temperatureLabel.text = String.format("%.2f", settings.activeParameters.temperature ?: 1.0)
-            topPSlider.value = (settings.activeParameters.topP?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+
+            topPSlider.value = (settings.activeParameters.topP ?: 1.0).times(100).toInt()
             topPLabel.text = String.format("%.2f", settings.activeParameters.topP ?: 1.0)
+
             topKSpinner.value = settings.activeParameters.topK ?: 0
-            minPSlider.value = (settings.activeParameters.minP?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+
+            minPSlider.value = (settings.activeParameters.minP ?: 0.0).times(100).toInt()
             minPLabel.text = String.format("%.2f", settings.activeParameters.minP ?: 0.0)
-            topASlider.value = (settings.activeParameters.topA?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+
+            topASlider.value = (settings.activeParameters.topA ?: 0.0).times(100).toInt()
             topALabel.text = String.format("%.2f", settings.activeParameters.topA ?: 0.0)
+
             seedTextField.text = settings.activeParameters.seed?.toString() ?: ""
-            frequencyPenaltySlider.value = (settings.activeParameters.frequencyPenalty?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+
+            frequencyPenaltySlider.value = (settings.activeParameters.frequencyPenalty ?: 0.0).times(100).toInt()
             frequencyPenaltyLabel.text = String.format("%.2f", settings.activeParameters.frequencyPenalty ?: 0.0)
-            presencePenaltySlider.value = (settings.activeParameters.presencePenalty?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+
+            presencePenaltySlider.value = (settings.activeParameters.presencePenalty ?: 0.0).times(100).toInt()
             presencePenaltyLabel.text = String.format("%.2f", settings.activeParameters.presencePenalty ?: 0.0)
-            repetitionPenaltySlider.value = (settings.activeParameters.repetitionPenalty?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+
+            repetitionPenaltySlider.value = (settings.activeParameters.repetitionPenalty ?: 1.0).times(100).toInt()
             repetitionPenaltyLabel.text = String.format("%.2f", settings.activeParameters.repetitionPenalty ?: 1.0)
+
             maxTokensTextField.text = settings.activeParameters.maxTokens?.toString() ?: ""
             stopTextField.text = settings.activeParameters.stop?.joinToString(",") ?: ""
             responseFormatComboBox.selectedItem = settings.activeParameters.responseFormatType ?: "default"
+
             logprobsCheckbox.isSelected = settings.activeParameters.logprobs ?: false
             topLogprobsSpinner.value = settings.activeParameters.topLogprobs ?: 0
             topLogprobsSpinner.isEnabled = logprobsCheckbox.isSelected
         }
 
-        // *** FIX: Corrected all helper function signatures ***
-        private fun addSliderRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Double, setter: (Double?) -> Unit): Pair<JSlider, JBLabel> {
-            val getter = {
-                when(label) {
-                    "🌡 Temperature" -> settings.activeParameters.temperature
-                    "   Top P" -> settings.activeParameters.topP
-                    "   Min P" -> settings.activeParameters.minP
-                    "   Top A" -> settings.activeParameters.topA
-                    "🔁 Frequency Penalty" -> settings.activeParameters.frequencyPenalty
-                    "   Presence Penalty" -> settings.activeParameters.presencePenalty
-                    "   Repetition Penalty" -> settings.activeParameters.repetitionPenalty
-                    else -> null
-                }
-            }
+        private fun Panel.addSliderRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Double, setter: (Double?) -> Unit): Pair<JSlider, JBLabel> {
             val slider = JSlider(range.first, range.last)
-            slider.value = (getter()?.times(100))?.toInt() ?: (defaultVal * 100).toInt()
-            val valueLabel = JBLabel(String.format("%.2f", getter() ?: defaultVal))
+            slider.value = (settings.activeParameters.temperature ?: defaultVal).times(100).toInt()
+            val valueLabel = JBLabel(String.format("%.2f", settings.activeParameters.temperature ?: defaultVal))
 
             slider.addChangeListener {
                 if (!slider.valueIsAdjusting) {
@@ -285,15 +283,8 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return slider to valueLabel
         }
 
-        private fun addSpinnerRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Int, setter: (Int?) -> Unit): JSpinner {
-            val getter = {
-                when(label) {
-                    "   Top K" -> settings.activeParameters.topK
-                    "   Top Logprobs" -> settings.activeParameters.topLogprobs
-                    else -> null
-                }
-            }
-            val spinner = JSpinner(SpinnerNumberModel(getter() ?: defaultVal, range.first, range.last, 1))
+        private fun Panel.addSpinnerRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Int, setter: (Int?) -> Unit): JSpinner {
+            val spinner = JSpinner(SpinnerNumberModel(settings.activeParameters.topK ?: defaultVal, range.first, range.last, 1))
             spinner.addChangeListener {
                 val value = spinner.value as Int
                 setter(if (value == defaultVal) null else value)
@@ -311,28 +302,34 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return spinner
         }
 
-        private fun addIntTextFieldRow(panel: Panel, label: @Nls String, setter: (Int?) -> Unit): JTextField {
+        private fun Panel.addIntTextFieldRow(panel: Panel, label: @Nls String, setter: (Int?) -> Unit): JTextField {
             val textField = JTextField(settings.activeParameters.maxTokens?.toString() ?: "", 8)
             (textField.document as AbstractDocument).documentFilter = IntDocumentFilter()
             textField.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = update()
                 override fun removeUpdate(e: DocumentEvent?) = update()
                 override fun changedUpdate(e: DocumentEvent?) = update()
-                private fun update() { setter(textField.text.toIntOrNull()); settings.notifySettingsChanged() }
+                private fun update() {
+                    setter(textField.text.toIntOrNull())
+                    settings.notifySettingsChanged()
+                }
             })
             panel.row(label) { cell(textField) }
             componentsToToggle.add(textField)
             return textField
         }
 
-        private fun addSeedRow(panel: Panel): JTextField {
+        private fun Panel.addSeedRow(panel: Panel): JTextField {
             val textField = JTextField(settings.activeParameters.seed?.toString() ?: "", 10)
             (textField.document as AbstractDocument).documentFilter = IntDocumentFilter()
             textField.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = update()
                 override fun removeUpdate(e: DocumentEvent?) = update()
                 override fun changedUpdate(e: DocumentEvent?) = update()
-                private fun update() { settings.activeParameters.seed = textField.text.toIntOrNull(); settings.notifySettingsChanged() }
+                private fun update() {
+                    settings.activeParameters.seed = textField.text.toIntOrNull()
+                    settings.notifySettingsChanged()
+                }
             })
             val randomButton = JButton(AllIcons.Actions.Refresh)
             randomButton.addActionListener { textField.text = Random().nextInt(Int.MAX_VALUE).toString() }
@@ -341,7 +338,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return textField
         }
 
-        private fun addStopSequenceRow(panel: Panel): JBTextField {
+        private fun Panel.addStopSequenceRow(panel: Panel): JBTextField {
             val textField = JBTextField()
             textField.text = settings.activeParameters.stop?.joinToString(",") ?: ""
             textField.emptyText.text = "e.g., \\n, Human:, AI:"
@@ -360,7 +357,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return textField
         }
 
-        private fun addResponseFormatRow(panel: Panel): JComboBox<String> {
+        private fun Panel.addResponseFormatRow(panel: Panel): JComboBox<String> {
             val items = listOf("default", "json_object")
             val comboBox = JComboBox(items.toTypedArray())
             comboBox.selectedItem = settings.activeParameters.responseFormatType ?: "default"
@@ -374,7 +371,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return comboBox
         }
 
-        private fun addJsonEditRow(panel: Panel, label: @Nls String, hint: String, setter: (String?) -> Unit): JButton {
+        private fun Panel.addJsonEditRow(panel: Panel, label: @Nls String, hint: String, setter: (String?) -> Unit): JButton {
             val button = JButton("Edit...")
             button.addActionListener {
                 val getter = {
@@ -397,7 +394,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return button
         }
 
-        private fun addLogprobsRow(panel: Panel): Pair<JCheckBox, JSpinner> {
+        private fun Panel.addLogprobsRow(panel: Panel): Pair<JCheckBox, JSpinner> {
             val spinner = addSpinnerRow(panel, "   Top Logprobs", 0..20, 0) { settings.activeParameters.topLogprobs = it }
             val checkbox = JCheckBox("Return log probabilities")
             checkbox.isSelected = settings.activeParameters.logprobs ?: false
