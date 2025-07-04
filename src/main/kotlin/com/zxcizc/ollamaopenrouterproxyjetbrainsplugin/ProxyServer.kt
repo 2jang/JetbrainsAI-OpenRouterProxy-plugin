@@ -386,6 +386,17 @@ class ProxyServer {
 
                 val isLocalModel = modelName.startsWith("(local)")
 
+                if (settings.systemPrompt.isNotBlank()) {
+                    val originalMessages = requestMap["messages"] as? List<Map<String, Any>>
+                    if (originalMessages != null) {
+                        val newMessages = mutableListOf<Map<String, Any>>()
+                        val systemMessage = mapOf("role" to "system", "content" to settings.systemPrompt)
+                        newMessages.add(systemMessage)
+                        newMessages.addAll(originalMessages)
+                        requestMap["messages"] = newMessages
+                    }
+                }
+
                 if (settings.isProxyEnabled && !isLocalModel) {
                     // OpenRouter
                     handleOpenRouterRequest(exchange, requestMap, settings)

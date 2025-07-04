@@ -25,6 +25,7 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState> {
     var overrideParameters: Boolean = false
     var activeParameters: ParameterPreset = ParameterPreset()
     var savedPresets: MutableMap<String, ParameterPreset> = mutableMapOf()
+    var systemPrompt: String = ""
 
     @Transient
     private val listeners = CopyOnWriteArrayList<SettingsChangeListener>()

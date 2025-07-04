@@ -90,6 +90,27 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                         comment("Toggle proxy via Tools menu or plugin settings")
                     }
                 }
+                group("System Prompt") {
+                    row {
+                        val systemPromptArea = JBTextArea().apply {
+                            text = settings.systemPrompt
+                            rows = 5
+                            lineWrap = true
+                            wrapStyleWord = true
+                            emptyText.text = "Enter System Prompts here..."
+                            document.addDocumentListener(object : DocumentListener {
+                                override fun insertUpdate(e: DocumentEvent?) = update()
+                                override fun removeUpdate(e: DocumentEvent?) = update()
+                                override fun changedUpdate(e: DocumentEvent?) = update()
+                                private fun update() {
+                                    settings.systemPrompt = text
+                                    settings.notifySettingsChanged()
+                                }
+                            })
+                        }
+                        cell(JBScrollPane(systemPromptArea)).align(Align.FILL)
+                    }.resizableRow()
+                }
                 group("Parameters") {
                     row {
                         overrideCheckBox = JCheckBox("Override model parameters")
