@@ -43,6 +43,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
 
         // --- UI Component Member Variables ---
         private lateinit var statusLabel: JBLabel
+        private lateinit var systemPromptArea: JBTextArea
         private lateinit var overrideCheckBox: JCheckBox
 
         private lateinit var temperatureSlider: JSlider
@@ -90,6 +91,27 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                         comment("Toggle proxy via Tools menu or plugin settings")
                     }
                 }
+                group("System Prompt") {
+                    row {
+                        systemPromptArea = JBTextArea().apply {
+                            text = settings.systemPrompt
+                            rows = 5
+                            lineWrap = true
+                            wrapStyleWord = true
+                            emptyText.text = "Enter System Prompts here..."
+                            document.addDocumentListener(object : DocumentListener {
+                                override fun insertUpdate(e: DocumentEvent?) = update()
+                                override fun removeUpdate(e: DocumentEvent?) = update()
+                                override fun changedUpdate(e: DocumentEvent?) = update()
+                                private fun update() {
+                                    settings.systemPrompt = text
+                                    settings.notifySettingsChanged()
+                                }
+                            })
+                        }
+                        cell(JBScrollPane(systemPromptArea)).align(Align.FILL)
+                    }.resizableRow()
+                }
                 group("Parameters") {
                     row {
                         overrideCheckBox = JCheckBox("Override model parameters")
@@ -104,18 +126,36 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                     addPresetManagementRows(this)
 
                     row {
-                        val parameterScrollPane = JBScrollPane(createParameterPanel()).apply { border = JBUI.Borders.empty() }
-                        cell(parameterScrollPane).align(Align.FILL)
+                        val parameterPanel = createParameterPanel()
+                        val parameterScrollPane = JBScrollPane(parameterPanel).apply { 
+                            border = JBUI.Borders.empty()
+                            verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                            // 크기 제한 제거 - 부모의 가용 공간을 모두 사용하도록
+                            minimumSize = Dimension(300, 100) // 최소 높이만 설정
+                        }
+                        cell(parameterScrollPane).align(Align.FILL).resizableColumn()
                     }.resizableRow()
                 }
             }
+            
+            // 메인 패널을 스크롤 가능하게 래핑
+            val mainScrollPane = JBScrollPane(mainPanel).apply {
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                border = JBUI.Borders.empty()
+                // 스크롤 속도 조정
+                verticalScrollBar.unitIncrement = 16
+                verticalScrollBar.blockIncrement = 64
+            }
+            
             toggleAllComponents(overrideCheckBox.isSelected)
             updateStatus()
-            return mainPanel
+            return mainScrollPane
         }
 
         private fun createParameterPanel(): JComponent {
-            return panel {
+            val parameterPanel = panel {
                 group("Sampling") {
                     addSliderRow(this, "🌡 Temperature", 0..200, 1.0, { settings.activeParameters.temperature }, { v -> settings.activeParameters.temperature = v }).also { (s, l) -> temperatureSlider = s; temperatureLabel = l }
                     addSliderRow(this, "   Top P", 0..100, 1.0, { settings.activeParameters.topP }, { v -> settings.activeParameters.topP = v }).also { (s, l) -> topPSlider = s; topPLabel = l }
@@ -147,6 +187,15 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                     addLogprobsRow(this).also { (cb, s) -> logprobsCheckbox = cb; topLogprobsSpinner = s }
                 }
             }
+            
+            // 부모 컨테이너의 가용 공간을 모두 사용하도록 크기 제한 제거
+            parameterPanel.apply {
+                // preferredSize와 minimumSize를 제거하여 자연스러운 크기 계산
+                preferredSize = null
+                minimumSize = null
+            }
+            
+            return parameterPanel
         }
 
         private fun toggleAllComponents(isEnabled: Boolean) {
@@ -160,6 +209,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                 val selectedName = presetComboBox.selectedItem as? String ?: "Default"
                 settings.savedPresets[selectedName]?.let { preset ->
                     settings.activeParameters = preset.copy()
+                    systemPromptArea.text = preset.systemPrompt ?: ""
                     updateAllUiFromState()
                     settings.notifySettingsChanged()
                 }
@@ -205,7 +255,9 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                         val rc = Messages.showOkCancelDialog("Preset '$presetName' already exists. Overwrite?", "Overwrite Preset", "Overwrite", "Cancel", Messages.getWarningIcon())
                         if (rc != Messages.OK) return@button
                     }
-                    settings.savedPresets[presetName] = settings.activeParameters.copy()
+                    settings.savedPresets[presetName] = settings.activeParameters.copy().apply {
+                        systemPrompt = this@ProxyControlPanel.settings.systemPrompt
+                    }
 
                     val model = presetComboBox.model as DefaultComboBoxModel
                     if (model.getIndexOf(presetName) == -1) { model.addElement(presetName) }
@@ -224,6 +276,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
         }
 
         private fun updateAllUiFromState() {
+            systemPromptArea.text = settings.systemPrompt
             temperatureSlider.value = (settings.activeParameters.temperature ?: 1.0).times(100).toInt()
             temperatureLabel.text = String.format("%.2f", settings.activeParameters.temperature ?: 1.0)
 

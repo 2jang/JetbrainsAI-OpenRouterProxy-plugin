@@ -355,6 +355,7 @@ class ProxyServer {
         private val log: Logger = Logger.getInstance(ChatProxyHandler::class.java)
         private val gson = Gson()
 
+        @Suppress("UNCHECKED_CAST")
         fun handle(exchange: HttpExchange) {
             var headersSent = false
             var requestBodyForLogging: String? = null
@@ -385,6 +386,17 @@ class ProxyServer {
                 }
 
                 val isLocalModel = modelName.startsWith("(local)")
+
+                if (settings.systemPrompt.isNotBlank()) {
+                    val originalMessages = requestMap["messages"] as? List<Map<String, Any>>
+                    if (originalMessages != null) {
+                        val newMessages = mutableListOf<Map<String, Any>>()
+                        val systemMessage = mapOf("role" to "system", "content" to settings.systemPrompt)
+                        newMessages.add(systemMessage)
+                        newMessages.addAll(originalMessages)
+                        requestMap["messages"] = newMessages
+                    }
+                }
 
                 if (settings.isProxyEnabled && !isLocalModel) {
                     // OpenRouter

@@ -36,7 +36,8 @@ data class ParameterPreset(
     @Tag("logitBiasJson")
     var logitBiasJson: String? = null,
     var logprobs: Boolean? = null,
-    var topLogprobs: Int? = null
+    var topLogprobs: Int? = null,
+    var systemPrompt: String? = null
 ) {
     // A no-arg constructor is required for XML serialization by IntelliJ platform
     constructor() : this(temperature = null)
