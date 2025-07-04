@@ -3,11 +3,13 @@ package com.zxcizc.ollamaopenrouterproxyjetbrainsplugin
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpHandler
 import com.sun.net.httpserver.HttpServer
+import com.intellij.openapi.diagnostic.Logger
 import java.io.BufferedReader
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -354,13 +356,20 @@ class ProxyServer {
         private val gson = Gson()
 
         fun handle(exchange: HttpExchange) {
-            var headersSent = false
+            val settings = PluginSettingsState.getInstance()
+            var requestBody: String? = null
+
             try {
-                val requestBody = readRequestBody(exchange)
+                // 요청 본문을 먼저 읽음
+                requestBody = readRequestBody(exchange)
+
+                if (settings.enableDebugLogging) {
+                    log.info("--- REQUEST from Client ---\nPath: ${exchange.requestURI.path}\nHeaders: ${exchange.requestHeaders.entries}\nBody: $requestBody")
+                }
+
                 val requestType = object : TypeToken<MutableMap<String, Any>>() {}.type
                 val requestMap: MutableMap<String, Any> = gson.fromJson(requestBody, requestType)
                 val modelName = requestMap["model"] as? String ?: ""
-                val settings = PluginSettingsState.getInstance()
 
                 if (modelName.startsWith("ℹ️") || modelName.startsWith("═══")) {
                     sendJsonResponse(exchange, 400, "{\"error\": \"This is an informational entry, not a usable model.\"}")
@@ -370,27 +379,19 @@ class ProxyServer {
                 val isLocalModel = modelName.startsWith("(local)")
 
                 if (settings.overrideParameters) {
-                    log.info("Parameter override is ENABLED. Applying overrides...")
                     applyParameterOverrides(requestMap, settings.activeParameters)
-                } else {
-                    log.info("Parameter override is DISABLED.")
                 }
 
                 if (settings.isProxyEnabled && !isLocalModel) {
-                    log.info("--> Sending to OpenRouter. Final Request Body: ${gson.toJson(requestMap)}")
                     handleOpenRouterRequest(exchange, requestMap, modelName, settings)
                 } else {
                     val localModelName = if (isLocalModel) modelName.removePrefix("(local) ") else modelName
                     requestMap["model"] = localModelName
-
-                    log.info("--> Sending to Local Ollama. Final Request Body: ${gson.toJson(requestMap)}")
                     forwardToLocalOllama(exchange, requestMap)
                 }
             } catch (e: Exception) {
-                log.error("Error during proxying request", e)
-                if (!headersSent) {
-                    sendJsonResponse(exchange, 500, "{\"error\": \"Internal proxy error: ${e.message?.replace("\"", "'")}\"}")
-                }
+                log.error("Error during proxying request. Initial request body: $requestBody", e)
+                sendJsonResponse(exchange, 500, "{\"error\": \"Internal proxy error: ${e.message?.replace("\"", "'")}\"}")
             }
         }
 
@@ -409,6 +410,11 @@ class ProxyServer {
             }
 
             val modifiedBody = gson.toJson(requestMap)
+
+            if (settings.enableDebugLogging) {
+                log.info("--- REQUEST to OpenRouter ---\nURL: ${OPENROUTER_CHAT_URL}\nBody: $modifiedBody")
+            }
+
             val connection = OPENROUTER_CHAT_URL.openConnection() as HttpURLConnection
             connection.apply {
                 requestMethod = "POST"
@@ -424,16 +430,27 @@ class ProxyServer {
 
             val responseCode = connection.responseCode
 
-            connection.headerFields.forEach { key, values ->
-                if (key != null) {
-                    exchange.responseHeaders.put(key, values)
-                }
-            }
+            // 헤더 복사 및 전송
+            connection.headerFields.forEach { key, values -> if (key != null) exchange.responseHeaders.put(key, values) }
             exchange.sendResponseHeaders(responseCode, 0)
 
+            // 스트리밍을 망가뜨리지 않고 로깅
             val responseStream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
+            val (loggingStream, originalStream) = teeInputStream(responseStream)
+
+            // 로그 기록용 스레드
+            Thread {
+                if (settings.enableDebugLogging) {
+                    val responseBodyForLogging = loggingStream.bufferedReader().readText()
+                    log.info("--- RESPONSE from OpenRouter ---\nStatus: $responseCode\nHeaders: ${connection.headerFields}\nBody: $responseBodyForLogging")
+                } else {
+                    loggingStream.readBytes() // 스트림을 소모해야 함
+                }
+            }.start()
+
+            // 실제 응답 스트림을 클라이언트로 전달
             exchange.responseBody.use { clientResponseStream ->
-                responseStream?.use { serverResponseStream ->
+                originalStream.use { serverResponseStream ->
                     val reader = BufferedReader(InputStreamReader(serverResponseStream, StandardCharsets.UTF_8))
                     reader.forEachLine { line ->
                         if (line.startsWith("data:")) {
@@ -483,18 +500,19 @@ class ProxyServer {
         }
 
         private fun applyParameterOverrides(requestMap: MutableMap<String, Any>, params: ParameterPreset) {
-            params.temperature?.let { if (it != 1.0) requestMap["temperature"] = it }
-            params.topP?.let { if (it != 1.0) requestMap["top_p"] = it }
-            params.topK?.let { if (it != 0) requestMap["top_k"] = it }
-            params.minP?.let { if (it != 0.0) requestMap["min_p"] = it }
-            params.topA?.let { if (it != 0.0) requestMap["top_a"] = it }
+            // *** FIX: Always add parameters if they exist in the object (no default value check) ***
+            params.temperature?.let { requestMap["temperature"] = it }
+            params.topP?.let { requestMap["top_p"] = it }
+            params.topK?.let { requestMap["top_k"] = it }
+            params.minP?.let { requestMap["min_p"] = it }
+            params.topA?.let { requestMap["top_a"] = it }
             params.seed?.let { requestMap["seed"] = it }
-            params.frequencyPenalty?.let { if (it != 0.0) requestMap["frequency_penalty"] = it }
-            params.presencePenalty?.let { if (it != 0.0) requestMap["presence_penalty"] = it }
-            params.repetitionPenalty?.let { if (it != 1.0) requestMap["repetition_penalty"] = it }
+            params.frequencyPenalty?.let { requestMap["frequency_penalty"] = it }
+            params.presencePenalty?.let { requestMap["presence_penalty"] = it }
+            params.repetitionPenalty?.let { requestMap["repetition_penalty"] = it }
             params.maxTokens?.let { requestMap["max_tokens"] = it }
             params.logprobs?.let { requestMap["logprobs"] = it }
-            params.topLogprobs?.let { if (it != 0) requestMap["top_logprobs"] = it }
+            params.topLogprobs?.let { requestMap["top_logprobs"] = it }
             params.stop?.let { if (it.isNotEmpty()) requestMap["stop"] = it }
             params.responseFormatType?.let { if (it.isNotBlank()) requestMap["response_format"] = mapOf("type" to it) }
 
@@ -533,6 +551,14 @@ class ProxyServer {
 
         private fun readRequestBody(exchange: HttpExchange): String {
             return exchange.requestBody.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+        }
+        // 스트림을 복제하는 헬퍼 함수
+        private fun teeInputStream(input: InputStream?): Pair<InputStream, InputStream> {
+            if (input == null) return ByteArrayInputStream(byteArrayOf()) to ByteArrayInputStream(byteArrayOf())
+            val baos = ByteArrayOutputStream()
+            input.copyTo(baos)
+            val bytes = baos.toByteArray()
+            return ByteArrayInputStream(bytes) to ByteArrayInputStream(bytes)
         }
     }
 }

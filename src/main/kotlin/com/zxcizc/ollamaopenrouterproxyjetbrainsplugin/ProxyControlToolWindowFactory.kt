@@ -4,7 +4,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -12,6 +14,7 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
@@ -59,7 +62,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
         private lateinit var repetitionPenaltySlider: JSlider
         private lateinit var repetitionPenaltyLabel: JBLabel
         private lateinit var maxTokensTextField: JTextField
-        private lateinit var stopTextField: JTextField
+        private lateinit var stopTextField: JBTextField
         private lateinit var responseFormatComboBox: JComboBox<String>
         private lateinit var toolsButton: JButton
         private lateinit var toolChoiceButton: JButton
@@ -77,14 +80,14 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             settings.addListener(this)
 
             val mainPanel = panel {
-                group("Proxy Control") {
+                group("Proxy Status") {
                     row {
-                        checkBox("Enable OpenRouter Proxy").bindSelected(settings::isProxyEnabled)
-                    }
-                    row("Status:") {
                         statusLabel = JBLabel("Initializing...")
                         statusLabel.foreground = JBColor.GRAY
-                        cell(statusLabel)
+                        cell(statusLabel).align(AlignX.FILL)
+                    }
+                    row {
+                        comment("Toggle proxy via Tools menu or plugin settings")
                     }
                 }
                 group("Parameters") {
@@ -96,6 +99,8 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                                 settings.notifySettingsChanged()
                             }.component
                     }
+                    addPresetManagementRows(this)
+
                     row {
                         val parameterScrollPane = JBScrollPane(createParameterPanel()).apply { border = JBUI.Borders.empty() }
                         cell(parameterScrollPane).align(Align.FILL)
@@ -146,10 +151,120 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             componentsToToggle.forEach { it.isEnabled = isEnabled }
         }
 
-        private fun Panel.addSliderRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Double, setter: (Double?) -> Unit): Pair<JSlider, JBLabel> {
+        private fun addPresetManagementRows(panel: Panel) {
+            lateinit var presetComboBox: ComboBox<String>
+
+            val loadPresetAction = {
+                val selectedName = presetComboBox.selectedItem as? String ?: "Default"
+                settings.savedPresets[selectedName]?.let { preset ->
+                    settings.activeParameters = preset.copy()
+                    updateAllUiFromState()
+                    settings.notifySettingsChanged()
+                }
+            }
+
+            panel.row("Load Preset:") {
+                presetComboBox = comboBox(settings.savedPresets.keys.sorted())
+                    .component
+                presetComboBox.addActionListener {
+                    if (it.actionCommand == "comboBoxChanged") loadPresetAction()
+                }
+
+                button("Delete") {
+                    val selectedName = presetComboBox.selectedItem as? String ?: return@button
+                    if (selectedName == "Default") {
+                        Messages.showErrorDialog("Cannot delete the Default preset.", "Error")
+                        return@button
+                    }
+                    val rc = Messages.showOkCancelDialog("Delete preset '$selectedName'?", "Delete Preset", "Delete", "Cancel", Messages.getWarningIcon())
+                    if (rc == Messages.OK) {
+                        settings.savedPresets.remove(selectedName)
+                        presetComboBox.model = DefaultComboBoxModel(settings.savedPresets.keys.sorted().toTypedArray())
+                        presetComboBox.selectedItem = "Default"
+                    }
+                }
+            }
+
+            panel.row("Save Preset As:") {
+                val presetNameField = JTextField(15)
+                cell(presetNameField).align(AlignX.FILL)
+
+                button("Save") {
+                    val presetName = presetNameField.text
+                    if (presetName.isBlank()) {
+                        Messages.showErrorDialog("Preset name cannot be empty.", "Error")
+                        return@button
+                    }
+                    if (presetName == "Default") {
+                        Messages.showErrorDialog("Cannot overwrite the Default preset.", "Error")
+                        return@button
+                    }
+                    if (settings.savedPresets.containsKey(presetName)) {
+                        val rc = Messages.showOkCancelDialog("Preset '$presetName' already exists. Overwrite?", "Overwrite Preset", "Overwrite", "Cancel", Messages.getWarningIcon())
+                        if (rc != Messages.OK) return@button
+                    }
+                    settings.savedPresets[presetName] = settings.activeParameters.copy()
+
+                    val model = presetComboBox.model as DefaultComboBoxModel
+                    if (model.getIndexOf(presetName) == -1) { model.addElement(presetName) }
+
+                    val sortedItems = (0 until model.size).map { model.getElementAt(it) }.sorted()
+                    presetComboBox.model = DefaultComboBoxModel(sortedItems.toTypedArray())
+
+                    presetComboBox.selectedItem = presetName
+                    presetNameField.text = ""
+
+                    settings.notifySettingsChanged()
+                }
+                button("Reset All") {
+                    presetComboBox.selectedItem = "Default"
+                }
+            }
+        }
+
+        private fun updateAllUiFromState() {
+            // This function is the same as the previous version
+            temperatureSlider.value = (settings.activeParameters.temperature?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+            temperatureLabel.text = String.format("%.2f", settings.activeParameters.temperature ?: 1.0)
+            topPSlider.value = (settings.activeParameters.topP?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+            topPLabel.text = String.format("%.2f", settings.activeParameters.topP ?: 1.0)
+            topKSpinner.value = settings.activeParameters.topK ?: 0
+            minPSlider.value = (settings.activeParameters.minP?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+            minPLabel.text = String.format("%.2f", settings.activeParameters.minP ?: 0.0)
+            topASlider.value = (settings.activeParameters.topA?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+            topALabel.text = String.format("%.2f", settings.activeParameters.topA ?: 0.0)
+            seedTextField.text = settings.activeParameters.seed?.toString() ?: ""
+            frequencyPenaltySlider.value = (settings.activeParameters.frequencyPenalty?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+            frequencyPenaltyLabel.text = String.format("%.2f", settings.activeParameters.frequencyPenalty ?: 0.0)
+            presencePenaltySlider.value = (settings.activeParameters.presencePenalty?.times(100))?.toInt() ?: (0.0 * 100).toInt()
+            presencePenaltyLabel.text = String.format("%.2f", settings.activeParameters.presencePenalty ?: 0.0)
+            repetitionPenaltySlider.value = (settings.activeParameters.repetitionPenalty?.times(100))?.toInt() ?: (1.0 * 100).toInt()
+            repetitionPenaltyLabel.text = String.format("%.2f", settings.activeParameters.repetitionPenalty ?: 1.0)
+            maxTokensTextField.text = settings.activeParameters.maxTokens?.toString() ?: ""
+            stopTextField.text = settings.activeParameters.stop?.joinToString(",") ?: ""
+            responseFormatComboBox.selectedItem = settings.activeParameters.responseFormatType ?: "default"
+            logprobsCheckbox.isSelected = settings.activeParameters.logprobs ?: false
+            topLogprobsSpinner.value = settings.activeParameters.topLogprobs ?: 0
+            topLogprobsSpinner.isEnabled = logprobsCheckbox.isSelected
+        }
+
+        // *** FIX: Corrected all helper function signatures ***
+        private fun addSliderRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Double, setter: (Double?) -> Unit): Pair<JSlider, JBLabel> {
+            val getter = {
+                when(label) {
+                    "🌡 Temperature" -> settings.activeParameters.temperature
+                    "   Top P" -> settings.activeParameters.topP
+                    "   Min P" -> settings.activeParameters.minP
+                    "   Top A" -> settings.activeParameters.topA
+                    "🔁 Frequency Penalty" -> settings.activeParameters.frequencyPenalty
+                    "   Presence Penalty" -> settings.activeParameters.presencePenalty
+                    "   Repetition Penalty" -> settings.activeParameters.repetitionPenalty
+                    else -> null
+                }
+            }
             val slider = JSlider(range.first, range.last)
-            slider.value = (settings.activeParameters.temperature?.times(100))?.toInt() ?: (defaultVal * 100).toInt()
-            val valueLabel = JBLabel(String.format("%.2f", settings.activeParameters.temperature ?: defaultVal))
+            slider.value = (getter()?.times(100))?.toInt() ?: (defaultVal * 100).toInt()
+            val valueLabel = JBLabel(String.format("%.2f", getter() ?: defaultVal))
 
             slider.addChangeListener {
                 if (!slider.valueIsAdjusting) {
@@ -162,8 +277,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             val resetButton = JButton(AllIcons.General.Reset)
             resetButton.addActionListener {
                 setter(null)
-                slider.value = (defaultVal * 100).toInt()
-                valueLabel.text = String.format("%.2f", defaultVal)
+                updateAllUiFromState()
                 settings.notifySettingsChanged()
             }
             panel.row(label) { cell(valueLabel); cell(slider).align(AlignX.FILL); cell(resetButton) }
@@ -171,8 +285,15 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return slider to valueLabel
         }
 
-        private fun Panel.addSpinnerRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Int, setter: (Int?) -> Unit): JSpinner {
-            val spinner = JSpinner(SpinnerNumberModel(settings.activeParameters.topK ?: defaultVal, range.first, range.last, 1))
+        private fun addSpinnerRow(panel: Panel, label: @Nls String, range: IntRange, defaultVal: Int, setter: (Int?) -> Unit): JSpinner {
+            val getter = {
+                when(label) {
+                    "   Top K" -> settings.activeParameters.topK
+                    "   Top Logprobs" -> settings.activeParameters.topLogprobs
+                    else -> null
+                }
+            }
+            val spinner = JSpinner(SpinnerNumberModel(getter() ?: defaultVal, range.first, range.last, 1))
             spinner.addChangeListener {
                 val value = spinner.value as Int
                 setter(if (value == defaultVal) null else value)
@@ -181,42 +302,37 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             val resetButton = JButton(AllIcons.General.Reset)
             resetButton.addActionListener {
                 setter(null)
-                spinner.value = defaultVal
+                updateAllUiFromState()
                 settings.notifySettingsChanged()
             }
             panel.row(label) { cell(spinner); cell(resetButton) }
-            componentsToToggle.addAll(listOf(spinner, resetButton))
+            componentsToToggle.add(spinner)
+            componentsToToggle.add(resetButton)
             return spinner
         }
 
-        private fun Panel.addIntTextFieldRow(panel: Panel, label: @Nls String, setter: (Int?) -> Unit): JTextField {
+        private fun addIntTextFieldRow(panel: Panel, label: @Nls String, setter: (Int?) -> Unit): JTextField {
             val textField = JTextField(settings.activeParameters.maxTokens?.toString() ?: "", 8)
             (textField.document as AbstractDocument).documentFilter = IntDocumentFilter()
             textField.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = update()
                 override fun removeUpdate(e: DocumentEvent?) = update()
                 override fun changedUpdate(e: DocumentEvent?) = update()
-                private fun update() {
-                    setter(textField.text.toIntOrNull())
-                    settings.notifySettingsChanged()
-                }
+                private fun update() { setter(textField.text.toIntOrNull()); settings.notifySettingsChanged() }
             })
             panel.row(label) { cell(textField) }
             componentsToToggle.add(textField)
             return textField
         }
 
-        private fun Panel.addSeedRow(panel: Panel): JTextField {
+        private fun addSeedRow(panel: Panel): JTextField {
             val textField = JTextField(settings.activeParameters.seed?.toString() ?: "", 10)
             (textField.document as AbstractDocument).documentFilter = IntDocumentFilter()
             textField.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = update()
                 override fun removeUpdate(e: DocumentEvent?) = update()
                 override fun changedUpdate(e: DocumentEvent?) = update()
-                private fun update() {
-                    settings.activeParameters.seed = textField.text.toIntOrNull()
-                    settings.notifySettingsChanged()
-                }
+                private fun update() { settings.activeParameters.seed = textField.text.toIntOrNull(); settings.notifySettingsChanged() }
             })
             val randomButton = JButton(AllIcons.Actions.Refresh)
             randomButton.addActionListener { textField.text = Random().nextInt(Int.MAX_VALUE).toString() }
@@ -225,10 +341,10 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return textField
         }
 
-        private fun Panel.addStopSequenceRow(panel: Panel): JTextField {
-            val textField = JTextField(settings.activeParameters.stop?.joinToString(",") ?: "")
-            // For placeholder, we should use JBTextField
-            // Since this is a minor UI detail, we'll omit it for stability for now.
+        private fun addStopSequenceRow(panel: Panel): JBTextField {
+            val textField = JBTextField()
+            textField.text = settings.activeParameters.stop?.joinToString(",") ?: ""
+            textField.emptyText.text = "e.g., \\n, Human:, AI:"
             textField.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = update()
                 override fun removeUpdate(e: DocumentEvent?) = update()
@@ -244,7 +360,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return textField
         }
 
-        private fun Panel.addResponseFormatRow(panel: Panel): JComboBox<String> {
+        private fun addResponseFormatRow(panel: Panel): JComboBox<String> {
             val items = listOf("default", "json_object")
             val comboBox = JComboBox(items.toTypedArray())
             comboBox.selectedItem = settings.activeParameters.responseFormatType ?: "default"
@@ -258,8 +374,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return comboBox
         }
 
-        // *** FIX: Added hintText parameter ***
-        private fun Panel.addJsonEditRow(panel: Panel, label: @Nls String, hintText: String, setter: (String?) -> Unit): JButton {
+        private fun addJsonEditRow(panel: Panel, label: @Nls String, hint: String, setter: (String?) -> Unit): JButton {
             val button = JButton("Edit...")
             button.addActionListener {
                 val getter = {
@@ -270,7 +385,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                         else -> ""
                     }
                 }
-                val dialog = JsonEditorDialog(getter() ?: "", label, hintText) // Pass hint to dialog
+                val dialog = JsonEditorDialog(getter() ?: "", label, hint)
                 if (dialog.showAndGet()) {
                     val newText = dialog.getJsonText()
                     setter(if (newText.isBlank()) null else newText)
@@ -282,7 +397,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             return button
         }
 
-        private fun Panel.addLogprobsRow(panel: Panel): Pair<JCheckBox, JSpinner> {
+        private fun addLogprobsRow(panel: Panel): Pair<JCheckBox, JSpinner> {
             val spinner = addSpinnerRow(panel, "   Top Logprobs", 0..20, 0) { settings.activeParameters.topLogprobs = it }
             val checkbox = JCheckBox("Return log probabilities")
             checkbox.isSelected = settings.activeParameters.logprobs ?: false
@@ -326,7 +441,6 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             override fun replace(fb: FilterBypass, offset: Int, length: Int, text: String, attrs: AttributeSet?) { if (text.matches(regex)) super.replace(fb, offset, length, text, attrs) }
         }
 
-        // *** FIX: Added hintText parameter to constructor ***
         private class JsonEditorDialog(@Nls initialText: String, @Nls title: String, @Nls hintText: String) : DialogWrapper(true) {
             private val textArea = JBTextArea(initialText, 15, 60)
             init {

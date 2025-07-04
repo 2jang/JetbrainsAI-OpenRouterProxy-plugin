@@ -1,5 +1,6 @@
 package com.zxcizc.ollamaopenrouterproxyjetbrainsplugin
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.Messages
 import org.jetbrains.annotations.Nls
@@ -8,6 +9,7 @@ import javax.swing.JComponent
 class PluginSettingsConfigurable : Configurable {
 
     private lateinit var mySettingsComponent: PluginSettingsComponent
+    private val log: Logger = Logger.getInstance(PluginSettingsConfigurable::class.java)
 
     @Nls(capitalization = Nls.Capitalization.Title)
     override fun getDisplayName(): String = "Ollama OpenRouter Proxy"
@@ -23,7 +25,7 @@ class PluginSettingsConfigurable : Configurable {
         val settings = PluginSettingsState.getInstance()
         return mySettingsComponent.openRouterApiKey != settings.openRouterApiKey ||
                 mySettingsComponent.ollamaBaseUrl != settings.ollamaBaseUrl ||
-                mySettingsComponent.proxyPort != settings.proxyPort || // <<< 포트 변경 감지
+                mySettingsComponent.proxyPort != settings.proxyPort ||
                 mySettingsComponent.enableDebugLogging != settings.enableDebugLogging ||
                 mySettingsComponent.isProxyEnabled != settings.isProxyEnabled ||
                 mySettingsComponent.selectedModels != settings.selectedModels
@@ -32,18 +34,35 @@ class PluginSettingsConfigurable : Configurable {
     override fun apply() {
         val settings = PluginSettingsState.getInstance()
         val oldPort = settings.proxyPort
+        val oldBaseUrl = settings.ollamaBaseUrl
 
+        // --- 로깅을 위해 이전 상태 저장 ---
+        val changedItems = mutableListOf<String>()
+        if (mySettingsComponent.openRouterApiKey != settings.openRouterApiKey) changedItems.add("API Key")
+        if (mySettingsComponent.ollamaBaseUrl != settings.ollamaBaseUrl) changedItems.add("Ollama URL changed to '${mySettingsComponent.ollamaBaseUrl}'")
+        if (mySettingsComponent.proxyPort != settings.proxyPort) changedItems.add("Proxy Port changed to ${mySettingsComponent.proxyPort}")
+        if (mySettingsComponent.enableDebugLogging != settings.enableDebugLogging) changedItems.add("Debug Logging ${if (mySettingsComponent.enableDebugLogging) "enabled" else "disabled"}")
+        if (mySettingsComponent.isProxyEnabled != settings.isProxyEnabled) changedItems.add("Proxy ${if (mySettingsComponent.isProxyEnabled) "enabled" else "disabled"}")
+        if (mySettingsComponent.selectedModels != settings.selectedModels) changedItems.add("Model Whitelist updated (${mySettingsComponent.selectedModels.size} models)")
+
+        // --- 설정 적용 ---
         settings.openRouterApiKey = mySettingsComponent.openRouterApiKey
         settings.ollamaBaseUrl = mySettingsComponent.ollamaBaseUrl
-        settings.proxyPort = mySettingsComponent.proxyPort // <<< 포트 설정 저장
+        settings.proxyPort = mySettingsComponent.proxyPort
         settings.enableDebugLogging = mySettingsComponent.enableDebugLogging
         settings.isProxyEnabled = mySettingsComponent.isProxyEnabled
         settings.selectedModels = mySettingsComponent.selectedModels.toMutableSet()
 
-        if (oldPort != settings.proxyPort) {
+        // --- 로그 기록 ---
+        if (changedItems.isNotEmpty()) {
+            log.info("Plugin settings updated: ${changedItems.joinToString(", ")}")
+        }
+
+        // --- 기능적 처리 ---
+        if (oldPort != settings.proxyPort || oldBaseUrl != settings.ollamaBaseUrl) {
             PluginStartupActivity.getProxyServerInstance().restart()
             Messages.showInfoMessage(
-                "Proxy server port has been changed to ${settings.proxyPort}. The server is restarting.",
+                "Proxy server port or Ollama URL has been changed. The server is restarting.",
                 "Server Restarted"
             )
         }
@@ -56,7 +75,7 @@ class PluginSettingsConfigurable : Configurable {
         val settings = PluginSettingsState.getInstance()
         mySettingsComponent.openRouterApiKey = settings.openRouterApiKey
         mySettingsComponent.ollamaBaseUrl = settings.ollamaBaseUrl
-        mySettingsComponent.proxyPort = settings.proxyPort // <<< 포트 설정 리셋
+        mySettingsComponent.proxyPort = settings.proxyPort
         mySettingsComponent.enableDebugLogging = settings.enableDebugLogging
         mySettingsComponent.isProxyEnabled = settings.isProxyEnabled
         mySettingsComponent.selectedModels = settings.selectedModels
