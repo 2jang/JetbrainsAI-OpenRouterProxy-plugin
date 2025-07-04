@@ -126,18 +126,36 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                     addPresetManagementRows(this)
 
                     row {
-                        val parameterScrollPane = JBScrollPane(createParameterPanel()).apply { border = JBUI.Borders.empty() }
-                        cell(parameterScrollPane).align(Align.FILL)
+                        val parameterPanel = createParameterPanel()
+                        val parameterScrollPane = JBScrollPane(parameterPanel).apply { 
+                            border = JBUI.Borders.empty()
+                            verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                            // 크기 제한 제거 - 부모의 가용 공간을 모두 사용하도록
+                            minimumSize = Dimension(300, 100) // 최소 높이만 설정
+                        }
+                        cell(parameterScrollPane).align(Align.FILL).resizableColumn()
                     }.resizableRow()
                 }
             }
+            
+            // 메인 패널을 스크롤 가능하게 래핑
+            val mainScrollPane = JBScrollPane(mainPanel).apply {
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                border = JBUI.Borders.empty()
+                // 스크롤 속도 조정
+                verticalScrollBar.unitIncrement = 16
+                verticalScrollBar.blockIncrement = 64
+            }
+            
             toggleAllComponents(overrideCheckBox.isSelected)
             updateStatus()
-            return mainPanel
+            return mainScrollPane
         }
 
         private fun createParameterPanel(): JComponent {
-            return panel {
+            val parameterPanel = panel {
                 group("Sampling") {
                     addSliderRow(this, "🌡 Temperature", 0..200, 1.0, { settings.activeParameters.temperature }, { v -> settings.activeParameters.temperature = v }).also { (s, l) -> temperatureSlider = s; temperatureLabel = l }
                     addSliderRow(this, "   Top P", 0..100, 1.0, { settings.activeParameters.topP }, { v -> settings.activeParameters.topP = v }).also { (s, l) -> topPSlider = s; topPLabel = l }
@@ -169,6 +187,15 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                     addLogprobsRow(this).also { (cb, s) -> logprobsCheckbox = cb; topLogprobsSpinner = s }
                 }
             }
+            
+            // 부모 컨테이너의 가용 공간을 모두 사용하도록 크기 제한 제거
+            parameterPanel.apply {
+                // preferredSize와 minimumSize를 제거하여 자연스러운 크기 계산
+                preferredSize = null
+                minimumSize = null
+            }
+            
+            return parameterPanel
         }
 
         private fun toggleAllComponents(isEnabled: Boolean) {
