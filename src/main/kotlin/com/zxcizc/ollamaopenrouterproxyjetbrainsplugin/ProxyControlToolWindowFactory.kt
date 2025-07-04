@@ -43,6 +43,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
 
         // --- UI Component Member Variables ---
         private lateinit var statusLabel: JBLabel
+        private lateinit var systemPromptArea: JBTextArea
         private lateinit var overrideCheckBox: JCheckBox
 
         private lateinit var temperatureSlider: JSlider
@@ -92,7 +93,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                 }
                 group("System Prompt") {
                     row {
-                        val systemPromptArea = JBTextArea().apply {
+                        systemPromptArea = JBTextArea().apply {
                             text = settings.systemPrompt
                             rows = 5
                             lineWrap = true
@@ -181,6 +182,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                 val selectedName = presetComboBox.selectedItem as? String ?: "Default"
                 settings.savedPresets[selectedName]?.let { preset ->
                     settings.activeParameters = preset.copy()
+                    systemPromptArea.text = preset.systemPrompt ?: ""
                     updateAllUiFromState()
                     settings.notifySettingsChanged()
                 }
@@ -226,7 +228,9 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
                         val rc = Messages.showOkCancelDialog("Preset '$presetName' already exists. Overwrite?", "Overwrite Preset", "Overwrite", "Cancel", Messages.getWarningIcon())
                         if (rc != Messages.OK) return@button
                     }
-                    settings.savedPresets[presetName] = settings.activeParameters.copy()
+                    settings.savedPresets[presetName] = settings.activeParameters.copy().apply {
+                        systemPrompt = this@ProxyControlPanel.settings.systemPrompt
+                    }
 
                     val model = presetComboBox.model as DefaultComboBoxModel
                     if (model.getIndexOf(presetName) == -1) { model.addElement(presetName) }
@@ -245,6 +249,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
         }
 
         private fun updateAllUiFromState() {
+            systemPromptArea.text = settings.systemPrompt
             temperatureSlider.value = (settings.activeParameters.temperature ?: 1.0).times(100).toInt()
             temperatureLabel.text = String.format("%.2f", settings.activeParameters.temperature ?: 1.0)
 

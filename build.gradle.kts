@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.zxcizc"
-version = "1.1"
+version = "1.2"
 
 repositories {
     mavenCentral()
@@ -28,7 +28,7 @@ intellijPlatform {
             sinceBuild.set("251")
         }
         changeNotes.set("""
-            Initial version
+            Add parameter and system prompt.
         """.trimIndent())
     }
 }

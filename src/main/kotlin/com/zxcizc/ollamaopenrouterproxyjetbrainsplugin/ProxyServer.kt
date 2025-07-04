@@ -355,6 +355,7 @@ class ProxyServer {
         private val log: Logger = Logger.getInstance(ChatProxyHandler::class.java)
         private val gson = Gson()
 
+        @Suppress("UNCHECKED_CAST")
         fun handle(exchange: HttpExchange) {
             var headersSent = false
             var requestBodyForLogging: String? = null
