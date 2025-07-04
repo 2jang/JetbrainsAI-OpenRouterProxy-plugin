@@ -17,7 +17,7 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState> {
     var openRouterApiKey: String = ""
     var enableDebugLogging: Boolean = false
     var ollamaBaseUrl: String = "http://localhost:11434"
-    var proxyPort: Int = 11444 // <<< 포트 설정 변수
+    var proxyPort: Int = 11444
     var selectedModels: MutableSet<String> = mutableSetOf()
 
     private var _isProxyEnabled: Boolean = true
@@ -51,10 +51,8 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState> {
 
     override fun initializeComponent() {
         if (savedPresets.isEmpty()) {
+            // *** FIX: Only "Default" preset remains ***
             savedPresets["Default"] = ParameterPreset()
-            savedPresets["Code Generation"] = ParameterPreset(temperature = 0.2, topP = 0.9, repetitionPenalty = 1.1)
-            savedPresets["Creative Writing"] = ParameterPreset(temperature = 1.2, presencePenalty = 0.5, topK = 50)
-            savedPresets["JSON Mode"] = ParameterPreset(temperature = 0.5, responseFormatType = "json_object")
         }
     }
 
