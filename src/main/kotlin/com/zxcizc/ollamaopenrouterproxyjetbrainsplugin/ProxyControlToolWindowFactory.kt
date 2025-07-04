@@ -80,16 +80,18 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             settings.addListener(this)
 
             val mainPanel = panel {
-                group("Proxy Control") {
+                // *** FIX: Changed group title and removed checkbox ***
+                group("Proxy Status") {
                     row {
-                        checkBox("Enable OpenRouter Proxy").bindSelected(settings::isProxyEnabled)
-                    }
-                    row("Status:") {
                         statusLabel = JBLabel("Initializing...")
                         statusLabel.foreground = JBColor.GRAY
-                        cell(statusLabel)
+                        cell(statusLabel).align(AlignX.FILL)
+                    }
+                    row {
+                        comment("Toggle via Tools menu or plugin settings")
                     }
                 }
+
                 group("Parameters") {
                     row {
                         overrideCheckBox = checkBox("Override model parameters")
@@ -166,7 +168,7 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
             panel.row("Load Preset:") {
                 presetComboBox = ComboBox(settings.savedPresets.keys.sorted().toTypedArray())
                 presetComboBox.addActionListener {
-                    if(it.actionCommand == "comboBoxChanged") loadPresetAction()
+                    if (it.actionCommand == "comboBoxChanged") loadPresetAction()
                 }
                 cell(presetComboBox).align(AlignX.FILL)
 
@@ -220,7 +222,9 @@ class ProxyControlToolWindowFactory : ToolWindowFactory {
 
                     settings.notifySettingsChanged()
                 }
-                button("Reset") { presetComboBox.selectedItem = "Default" }
+                button("Reset") {
+                    presetComboBox.selectedItem = "Default"
+                }
             }
         }
 
