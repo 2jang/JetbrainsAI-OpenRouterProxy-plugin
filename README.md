@@ -5,7 +5,7 @@
 [![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2025.1.3-000000?style=for-the-badge&logo=intellijidea&logoColor=white)](https://plugins.jetbrains.com/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A?style=for-the-badge&logo=gradle&logoColor=white)](https://gradle.org/)
 
-<p>:earth_americas: <a href="https://github.com/2jang/ollama-chutesai-proxy/blob/main/README-ko.md">한국어</a> | <a href="https://github.com/2jang/ollama-chutesai-proxy">English</a></p>
+<p>:earth_americas: <a href="https://github.com/2jang/JetbrainsAI-OpenRouterProxy-plugin/blob/main/README-ko.md">한국어</a> | <a href="https://github.com/2jang/JetbrainsAI-OpenRouterProxy-plugin">English</a></p>
 
 **JetbrainsAI-OpenRouterProxy-plugin** is a proxy plugin that connects the **AI Assistant** in JetBrains IDEs to the cloud-based AI models of **OpenRouter.ai**. This allows developers to freely choose and utilize over 100 of the latest models, such as GPT, Claude, and Gemini, directly within the Jetbrains AI Assistant during their coding workflow.
 
