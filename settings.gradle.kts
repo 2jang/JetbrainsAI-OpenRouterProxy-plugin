@@ -1,1 +1,1 @@
-rootProject.name = "OllamaOpenRouterProxy-jetbrains-plugin"
+rootProject.name = "JetbrainsAI-OpenRouterProxy-plugin"
