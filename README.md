@@ -1,4 +1,4 @@
-# 🚀 AI Assistant를 위한 OpenRouter 프록시
+# 🚀 AI 어시스턴트에서 OpenRouter 사용하게 해주는 플러그인
 
 [![JetBrains Plugin](https://img.shields.io/badge/JetBrains-Plugin-000000?style=for-the-badge&logo=jetbrains&logoColor=white)](https://plugins.jetbrains.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
